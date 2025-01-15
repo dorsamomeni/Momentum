@@ -21,6 +21,7 @@ const Welcome = () => {
       </TouchableOpacity>
 
       <Text style={styles.title}>Welcome to Momentum!</Text>
+      <Text style={styles.subtitle}>Your fitness journey starts here</Text>
 
       <View style={styles.inputContainer}>
         <View style={styles.inputGroup}>
@@ -57,6 +58,13 @@ const Welcome = () => {
         <TouchableOpacity style={styles.startButton}>
           <Text style={styles.startButtonText}>Start</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => navigation.navigate("Clients")}
+        >
+          <Text style={styles.testButtonText}>Test</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -72,8 +80,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
-    marginTop: 170,
-    marginBottom: 50,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 18,
+    textAlign: "center",
+    marginBottom: 20,
   },
   inputContainer: {
     gap: 20,
@@ -121,7 +134,6 @@ const styles = StyleSheet.create({
   startButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
   },
   backButton: {
     position: "absolute",
@@ -132,6 +144,17 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 28,
     color: "#000",
+  },
+  testButton: {
+    backgroundColor: "#007BFF",
+    padding: 10,
+    borderRadius: 5,
+    alignItems: "center",
+    marginTop: 15,
+  },
+  testButtonText: {
+    color: "#fff",
+    fontSize: 14,
   },
 });
 

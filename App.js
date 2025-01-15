@@ -8,6 +8,7 @@ import OpeningScreen from "./pages/OpeningScreen";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import Welcome from "./pages/Welcome";
+import Clients from "./pages/Clients";
 
 const slides = [
   {
@@ -106,6 +107,11 @@ export default function App() {
             <Stack.Screen
               name="Welcome"
               component={Welcome}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Clients"
+              component={Clients}
               options={{ headerShown: false }}
             />
           </>

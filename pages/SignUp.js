@@ -7,10 +7,26 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { signup } from "../src/auth/signup";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [role, setRole] = useState(null);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const navigation = useNavigation();
+
+  const handleSignUp = async () => {
+    try {
+      const result = await signup(email, password);
+      console.log("Signup successful:", result);
+      navigation.navigate("Welcome");
+    } catch (error) {
+      console.error("Signup error:", error);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -25,12 +41,26 @@ const SignUp = () => {
 
       <View style={styles.inputContainer}>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Username</Text>
+          <Text style={styles.label}>First Name</Text>
           <TextInput
             style={styles.input}
-            placeholder="Choose a username"
+            placeholder="Your first name"
             placeholderTextColor="#666"
-            autoCapitalize="none"
+            autoCapitalize="words"
+            value={firstName}
+            onChangeText={setFirstName}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Last Name</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Your last name"
+            placeholderTextColor="#666"
+            autoCapitalize="words"
+            value={lastName}
+            onChangeText={setLastName}
           />
         </View>
 
@@ -41,6 +71,18 @@ const SignUp = () => {
             placeholder="Your email address"
             placeholderTextColor="#666"
             keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Username</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Choose a username"
+            placeholderTextColor="#666"
             autoCapitalize="none"
           />
         </View>
@@ -54,6 +96,8 @@ const SignUp = () => {
               placeholderTextColor="#666"
               secureTextEntry={!showPassword}
               autoCapitalize="none"
+              value={password}
+              onChangeText={setPassword}
             />
             <TouchableOpacity
               style={styles.showButton}
@@ -66,10 +110,41 @@ const SignUp = () => {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => navigation.navigate("Welcome")}
-        >
+        <View style={styles.roleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.roleButton,
+              role === "coach" && styles.selectedRoleButton,
+            ]}
+            onPress={() => setRole("coach")}
+          >
+            <Text
+              style={
+                role === "coach" ? styles.selectedRoleText : styles.roleText
+              }
+            >
+              Coach
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.roleButton,
+              role === "athlete" && styles.selectedRoleButton,
+            ]}
+            onPress={() => setRole("athlete")}
+          >
+            <Text
+              style={
+                role === "athlete" ? styles.selectedRoleText : styles.roleText
+              }
+            >
+              Athlete
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.createButton} onPress={handleSignUp}>
           <Text style={styles.createButtonText}>Create account</Text>
         </TouchableOpacity>
       </View>
@@ -82,16 +157,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 20,
+    justifyContent: "flex-start",
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    marginTop: 170,
-    marginBottom: 50,
+    marginTop: 100,
+    marginBottom: 20,
     textAlign: "center",
   },
   inputContainer: {
-    gap: 20,
+    gap: 15,
   },
   inputGroup: {
     gap: 8,
@@ -148,6 +224,30 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 28,
     color: "#000",
+  },
+  roleContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  roleButton: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    alignItems: "center",
+    marginHorizontal: 5,
+  },
+  selectedRoleButton: {
+    backgroundColor: "#000",
+    borderColor: "#000",
+  },
+  roleText: {
+    color: "#000",
+  },
+  selectedRoleText: {
+    color: "#fff",
   },
 });
 
