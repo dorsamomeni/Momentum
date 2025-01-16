@@ -23,6 +23,13 @@ const OpeningScreen = ({ navigation }) => {
         >
           <Text style={styles.whiteButtonText}>Create Account</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => navigation.navigate("Clients")}
+        >
+          <Text style={styles.testButtonText}>Test</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -78,6 +85,16 @@ const styles = StyleSheet.create({
     color: "#000",
     fontSize: 18,
     fontWeight: "600",
+  },
+  testButton: {
+    backgroundColor: "#007BFF",
+    padding: 10,
+    borderRadius: 5,
+    alignItems: "center",
+  },
+  testButtonText: {
+    color: "#fff",
+    fontSize: 16,
   },
 });
 
