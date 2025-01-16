@@ -6,12 +6,21 @@ import {
   TextInput,
   TouchableOpacity,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 
 const SignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const navigation = useNavigation();
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.backButtonText}>←</Text>
+      </TouchableOpacity>
+
       <Text style={styles.title}>Log in</Text>
 
       <View style={styles.inputContainer}>
@@ -54,7 +63,7 @@ const SignIn = () => {
 
       <View style={styles.signupContainer}>
         <Text style={styles.signupText}>Don't have an account? </Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
           <Text style={styles.signupLink}>Sign up</Text>
         </TouchableOpacity>
       </View>
@@ -140,6 +149,16 @@ const styles = StyleSheet.create({
     color: "#000",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  backButton: {
+    position: "absolute",
+    top: 60,
+    left: 20,
+    zIndex: 1,
+  },
+  backButtonText: {
+    fontSize: 28,
+    color: "#000",
   },
 });
 

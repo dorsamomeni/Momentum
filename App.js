@@ -5,7 +5,9 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import AppIntroSlider from "react-native-app-intro-slider";
 import OpeningScreen from "./pages/OpeningScreen";
-import SignIn from './pages/SignIn';
+import SignIn from "./pages/SignIn";
+import SignUp from "./pages/SignUp";
+import Welcome from "./pages/Welcome";
 
 const slides = [
   {
@@ -94,6 +96,16 @@ export default function App() {
             <Stack.Screen
               name="SignIn"
               component={SignIn}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="SignUp"
+              component={SignUp}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Welcome"
+              component={Welcome}
               options={{ headerShown: false }}
             />
           </>
