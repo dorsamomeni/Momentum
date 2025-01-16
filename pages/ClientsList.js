@@ -1,8 +1,11 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { useNavigation } from "@react-navigation/native";
 
 const ClientsList = () => {
+  const navigation = useNavigation();
+
   const clients = [
     {
       name: "Francis Holzworth",
@@ -41,7 +44,10 @@ const ClientsList = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Clients</Text>
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate("ClientRequests")}
+          >
             <Icon name="add-circle" size={16} color="#000" />
             <Text style={styles.buttonText}>Requests</Text>
           </TouchableOpacity>
@@ -72,8 +78,8 @@ const ClientsList = () => {
               <Image
                 source={{
                   uri: "https://img.icons8.com/material/24/delete-sign--v1.png",
-                }} 
-                style={styles.deleteIcon} 
+                }}
+                style={styles.deleteIcon}
               />
             </TouchableOpacity>
             <TouchableOpacity
@@ -83,7 +89,7 @@ const ClientsList = () => {
             >
               <Image
                 source={{ uri: client.programLogo }}
-                style={[styles.programLogo, { tintColor: "black" }]} 
+                style={[styles.programLogo, { tintColor: "black" }]}
                 onError={() =>
                   console.log(`Failed to load logo for ${client.name}`)
                 } // Debugging
@@ -158,7 +164,7 @@ const styles = StyleSheet.create({
   },
   symbolContainer: {
     flexDirection: "row",
-    alignItems: "center", 
+    alignItems: "center",
   },
   deleteIcon: {
     width: 20,
@@ -168,11 +174,11 @@ const styles = StyleSheet.create({
   programLogo: {
     width: 20,
     height: 20,
-    marginRight: 2, 
+    marginRight: 2,
   },
   uncheckIcon: {
     width: 20,
-    height: 20, 
+    height: 20,
   },
   initial: {
     color: "#fff",

@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import ClientsList from "./ClientsList";
 import ClientsStats from "./ClientsStats";
 import ClientsSettings from "./ClientsSettings";
+import ClientRequests from "./ClientRequests";
 import { TouchableOpacity, StyleSheet } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 
@@ -30,6 +31,17 @@ const ClientsTabs = () => {
           tabBarButton: (props) => (
             <CustomTabBarButton {...props}>
               <Icon name="users" size={24} color="#000" />
+            </CustomTabBarButton>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Client Requests"
+        component={ClientRequests}
+        options={{
+          tabBarButton: (props) => (
+            <CustomTabBarButton {...props}>
+              <Icon name="envelope" size={24} color="#000" />
             </CustomTabBarButton>
           ),
         }}

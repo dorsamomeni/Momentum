@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import ClientsTabs from "./ClientsTabs";
+import ClientRequests from "./ClientRequests";
 
 const Clients = () => {
   return <ClientsTabs />;
