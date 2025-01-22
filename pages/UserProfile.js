@@ -21,7 +21,7 @@ const UserProfile = ({ route }) => {
           <Text style={styles.initial}>{username[0].toUpperCase()}</Text>
         </View>
         <Text style={styles.username}>{username}</Text>
-        
+
         <TouchableOpacity style={styles.addButton}>
           <Text style={styles.addButtonText}>Add Client</Text>
         </TouchableOpacity>
@@ -89,4 +89,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default UserProfile; 
+export default UserProfile;
