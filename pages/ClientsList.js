@@ -1,8 +1,11 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { useNavigation } from "@react-navigation/native";
 
 const ClientsList = () => {
+  const navigation = useNavigation();
+
   const clients = [
     {
       name: "Francis Holzworth",
@@ -41,7 +44,10 @@ const ClientsList = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Clients</Text>
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate("ClientRequests")}
+          >
             <Icon name="add-circle" size={16} color="#000" />
             <Text style={styles.buttonText}>Requests</Text>
           </TouchableOpacity>
@@ -52,51 +58,36 @@ const ClientsList = () => {
         </View>
       </View>
 
-      {/* Client Profile Section */}
       {clients.map((client, index) => (
         <View key={index} style={styles.clientContainer}>
-          <View
-            style={[styles.profilePhoto, { backgroundColor: client.color }]}
-          >
-            <Text style={styles.initial}>{client.initial}</Text>
-          </View>
-          <View style={styles.clientInfoContainer}>
-            <Text style={styles.clientName}>{client.name}</Text>
-          </View>
-          <View style={styles.symbolContainer}>
-            <TouchableOpacity
-              onPress={() => {
-                /* Logic to delete client */
-              }}
+          <View style={styles.leftContainer}>
+            <View
+              style={[styles.profilePhoto, { backgroundColor: client.color }]}
             >
-              <Image
-                source={{
-                  uri: "https://img.icons8.com/material/24/delete-sign--v1.png",
-                }} 
-                style={styles.deleteIcon} 
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                /* Logic to open person's program */
-              }}
-            >
-              <Image
-                source={{ uri: client.programLogo }}
-                style={[styles.programLogo, { tintColor: "black" }]} 
-                onError={() =>
-                  console.log(`Failed to load logo for ${client.name}`)
-                } // Debugging
-              />
-            </TouchableOpacity>
-            <Image
-              source={{
-                uri: "https://img.icons8.com/metro/26/uncheck-all.png",
-              }} // Uncheck icon
-              style={styles.uncheckIcon}
-            />
+              <Text style={styles.initial}>{client.initial}</Text>
+            </View>
+            <View style={styles.clientInfoContainer}>
+              <Text style={styles.clientName}>{client.name}</Text>
+            </View>
           </View>
-          <Image source={{ uri: client.logo }} style={styles.logo} />
+
+          <View style={styles.rightContainer}>
+            <View style={styles.symbolContainer}>
+              <TouchableOpacity
+                onPress={() => {
+                  /* Logic to reject client */
+                }}
+              >
+                <Icon
+                  name="close"
+                  size={24}
+                  color="#000"
+                  style={styles.rejectIcon}
+                />
+              </TouchableOpacity>
+            </View>
+            <Image source={{ uri: client.logo }} style={styles.logo} />
+          </View>
         </View>
       ))}
 
@@ -116,12 +107,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 60,
   },
   title: {
     fontSize: 30,
     fontWeight: "bold",
     marginBottom: 0,
-    paddingBottom: 15,
+    paddingBottom: 0,
   },
   buttonContainer: {
     flexDirection: "row",
@@ -143,7 +135,22 @@ const styles = StyleSheet.create({
   clientContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 30,
+    marginBottom: 20,
+    justifyContent: "space-between",
+    paddingRight: 15,
+  },
+  leftContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    maxWidth: "90%",
+  },
+  rightContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: 60,
+    justifyContent: "flex-end",
+    paddingRight: 25,
   },
   profilePhoto: {
     width: 50,
@@ -154,25 +161,15 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   clientInfoContainer: {
-    marginRight: 10,
+    flex: 1,
   },
   symbolContainer: {
     flexDirection: "row",
-    alignItems: "center", 
+    alignItems: "center",
+    marginRight: 15,
   },
-  deleteIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 2,
-  },
-  programLogo: {
-    width: 20,
-    height: 20,
-    marginRight: 2, 
-  },
-  uncheckIcon: {
-    width: 20,
-    height: 20, 
+  rejectIcon: {
+    marginLeft: 0,
   },
   initial: {
     color: "#fff",
@@ -182,7 +179,7 @@ const styles = StyleSheet.create({
   clientName: {
     fontSize: 18,
     fontWeight: "600",
-    marginRight: 10,
+    paddingRight: 10,
   },
   logo: {
     width: 20,
