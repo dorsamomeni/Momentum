@@ -10,6 +10,8 @@ import SignUp from "./pages/SignUp";
 import Welcome from "./pages/Welcome";
 import Clients from "./pages/Clients";
 import ClientRequests from "./pages/ClientRequests";
+import AddClient from "./pages/AddClient";
+import UserProfile from "./pages/UserProfile";
 
 const slides = [
   {
@@ -118,6 +120,16 @@ export default function App() {
             <Stack.Screen
               name="ClientRequests"
               component={ClientRequests}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="AddClient"
+              component={AddClient}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="UserProfile"
+              component={UserProfile}
               options={{ headerShown: false }}
             />
           </>

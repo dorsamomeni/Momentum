@@ -51,7 +51,10 @@ const ClientsList = () => {
             <Icon name="add-circle" size={16} color="#000" />
             <Text style={styles.buttonText}>Requests</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.button}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate("AddClient")}
+          >
             <Icon name="people" size={16} color="#000" />
             <Text style={styles.buttonText}>Add Client</Text>
           </TouchableOpacity>
