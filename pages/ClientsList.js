@@ -1,5 +1,12 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+} from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useNavigation } from "@react-navigation/native";
 
@@ -61,40 +68,38 @@ const ClientsList = () => {
         </View>
       </View>
 
-      {clients.map((client, index) => (
-        <View key={index} style={styles.clientContainer}>
-          <View style={styles.leftContainer}>
-            <View
-              style={[styles.profilePhoto, { backgroundColor: client.color }]}
-            >
-              <Text style={styles.initial}>{client.initial}</Text>
+      <ScrollView style={styles.clientsList}>
+        {clients.map((client, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.clientContainer}
+            onPress={() => navigation.navigate("ClientDetails", { client })}
+          >
+            <View style={styles.leftContainer}>
+              <View
+                style={[styles.profilePhoto, { backgroundColor: client.color }]}
+              >
+                <Text style={styles.initial}>{client.initial}</Text>
+              </View>
+              <View style={styles.clientInfoContainer}>
+                <Text style={styles.clientName}>{client.name}</Text>
+              </View>
             </View>
-            <View style={styles.clientInfoContainer}>
-              <Text style={styles.clientName}>{client.name}</Text>
-            </View>
-          </View>
 
-          <View style={styles.rightContainer}>
-            <View style={styles.symbolContainer}>
+            <View style={styles.rightContainer}>
               <TouchableOpacity
-                onPress={() => {
+                style={styles.removeButton}
+                onPress={(e) => {
+                  e.stopPropagation();
                   /* Logic to reject client */
                 }}
               >
-                <Icon
-                  name="close"
-                  size={24}
-                  color="#000"
-                  style={styles.rejectIcon}
-                />
+                <Icon name="close" size={20} color="#666" />
               </TouchableOpacity>
             </View>
-            <Image source={{ uri: client.logo }} style={styles.logo} />
-          </View>
-        </View>
-      ))}
-
-      {/* I will add clients list logic here */}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 };
@@ -110,50 +115,45 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 60,
+    marginBottom: 30,
   },
   title: {
     fontSize: 30,
     fontWeight: "bold",
-    marginBottom: 0,
-    paddingBottom: 0,
   },
   buttonContainer: {
     flexDirection: "row",
-    gap: 10,
-    marginLeft: 35,
+    gap: 12,
   },
   button: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f0f0f0",
-    padding: 5,
-    borderRadius: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   buttonText: {
     color: "#000",
     fontSize: 14,
-    marginLeft: 5,
+    marginLeft: 6,
+    fontWeight: "500",
+  },
+  clientsList: {
+    flex: 1,
   },
   clientContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
-    justifyContent: "space-between",
-    paddingRight: 15,
+    backgroundColor: "#f8f8f8",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
   },
   leftContainer: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    maxWidth: "90%",
-  },
-  rightContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: 60,
-    justifyContent: "flex-end",
-    paddingRight: 25,
   },
   profilePhoto: {
     width: 50,
@@ -161,32 +161,31 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 10,
-  },
-  clientInfoContainer: {
-    flex: 1,
-  },
-  symbolContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 15,
-  },
-  rejectIcon: {
-    marginLeft: 0,
   },
   initial: {
     color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
   },
-  clientName: {
-    fontSize: 18,
-    fontWeight: "600",
-    paddingRight: 10,
+  clientInfoContainer: {
+    marginLeft: 16,
+    flex: 1,
   },
-  logo: {
-    width: 20,
-    height: 20,
+  clientName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#000",
+  },
+  rightContainer: {
+    marginLeft: 12,
+  },
+  removeButton: {
+    width: 36,
+    height: 36,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 

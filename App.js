@@ -12,6 +12,9 @@ import Clients from "./pages/Clients";
 import ClientRequests from "./pages/ClientRequests";
 import AddClient from "./pages/AddClient";
 import UserProfile from "./pages/UserProfile";
+import ClientDetails from "./pages/ClientDetails";
+import CreateBlock from "./pages/CreateBlock";
+import WorkoutProgram from "./pages/WorkoutProgram";
 
 const slides = [
   {
@@ -130,6 +133,21 @@ export default function App() {
             <Stack.Screen
               name="UserProfile"
               component={UserProfile}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ClientDetails"
+              component={ClientDetails}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="CreateBlock"
+              component={CreateBlock}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="WorkoutProgram"
+              component={WorkoutProgram}
               options={{ headerShown: false }}
             />
           </>
