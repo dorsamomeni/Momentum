@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 
@@ -698,6 +698,10 @@ const ClientDetails = ({ route }) => {
     }
   ]);
 
+  const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] = useState(false);
+  const [selectedBlock, setSelectedBlock] = useState(null);
+  const [tempBlockName, setTempBlockName] = useState("");
+
   const handleNewBlock = (blockName, sessionsPerWeek) => {
     // Move current block to previous blocks if it exists
     if (activeBlocks.length > 0) {
@@ -767,6 +771,35 @@ const ClientDetails = ({ route }) => {
     setActiveBlocks([...activeBlocks, duplicatedBlock]);
   };
 
+  const handleRenameBlock = (block) => {
+    setSelectedBlock(block);
+    setTempBlockName(block.name);
+    setIsBlockRenameModalVisible(true);
+  };
+
+  const saveBlockName = () => {
+    if (selectedBlock && tempBlockName.trim()) {
+      if (selectedBlock.status === "active") {
+        setActiveBlocks(
+          activeBlocks.map((block) =>
+            block.id === selectedBlock.id
+              ? { ...block, name: tempBlockName.trim() }
+              : block
+          )
+        );
+      } else {
+        setPreviousBlocks(
+          previousBlocks.map((block) =>
+            block.id === selectedBlock.id
+              ? { ...block, name: tempBlockName.trim() }
+              : block
+          )
+        );
+      }
+    }
+    setIsBlockRenameModalVisible(false);
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -811,7 +844,18 @@ const ClientDetails = ({ route }) => {
                 })}
               >
                 <View style={styles.blockHeader}>
-                  <Text style={styles.blockName}>{block.name}</Text>
+                  <View style={styles.blockTitleContainer}>
+                    <Text style={styles.blockName}>{block.name}</Text>
+                    <TouchableOpacity
+                      style={styles.blockRenameButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleRenameBlock(block);
+                      }}
+                    >
+                      <Icon name="pencil-outline" size={16} color="#666" />
+                    </TouchableOpacity>
+                  </View>
                   <View style={styles.blockActions}>
                     <TouchableOpacity
                       style={styles.duplicateButton}
@@ -820,8 +864,7 @@ const ClientDetails = ({ route }) => {
                       <Icon name="copy-outline" size={18} color="#4CAF50" />
                     </TouchableOpacity>
                     <View style={styles.statusBadge}>
-                      <Icon name="radio-button-on" size={16} color="#4CAF50" />
-                      <Text style={styles.statusText}>Active</Text>
+                      <Icon name="radio-button-on" size={18} color="#4CAF50" />
                     </View>
                   </View>
                 </View>
@@ -848,7 +891,18 @@ const ClientDetails = ({ route }) => {
               })}
             >
               <View style={styles.blockHeader}>
-                <Text style={styles.blockName}>{block.name}</Text>
+                <View style={styles.blockTitleContainer}>
+                  <Text style={styles.blockName}>{block.name}</Text>
+                  <TouchableOpacity
+                    style={styles.blockRenameButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleRenameBlock(block);
+                    }}
+                  >
+                    <Icon name="pencil-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.blockActions}>
                   <TouchableOpacity
                     style={styles.duplicateButton}
@@ -857,10 +911,7 @@ const ClientDetails = ({ route }) => {
                     <Icon name="copy-outline" size={18} color="#666" />
                   </TouchableOpacity>
                   <View style={styles.statusBadge}>
-                    <Icon name="checkmark-circle" size={16} color="#666" />
-                    <Text style={[styles.statusText, styles.completedText]}>
-                      Completed
-                    </Text>
+                    <Icon name="checkmark-circle" size={18} color="#666" />
                   </View>
                 </View>
               </View>
@@ -871,6 +922,39 @@ const ClientDetails = ({ route }) => {
           ))}
         </View>
       </ScrollView>
+
+      <Modal visible={isBlockRenameModalVisible} transparent animationType="fade">
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setIsBlockRenameModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rename Block</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempBlockName}
+              onChangeText={setTempBlockName}
+              placeholder="Enter block name"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setIsBlockRenameModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={saveBlockName}
+              >
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -936,26 +1020,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  blockTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   blockName: {
     fontSize: 18,
     fontWeight: "600",
+    marginRight: 8,
+    flex: 1,
   },
   statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  statusText: {
-    marginLeft: 4,
-    fontSize: 14,
-    color: "#4CAF50",
-    fontWeight: "500",
-  },
-  completedText: {
-    color: "#666",
+    padding: 4,  // Match other button padding
+    opacity: 0.6,  // Match other button opacity
   },
   dateText: {
     color: "#666",
@@ -990,13 +1068,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginLeft: 8,
   },
   duplicateButton: {
-    padding: 6,
+    padding: 4,
     borderRadius: 6,
     backgroundColor: 'transparent',
     opacity: 0.6,
-    marginRight: -2,
+  },
+  blockRenameButton: {
+    padding: 4,
+    opacity: 0.6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    width: '80%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#000',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  saveButton: {
+    backgroundColor: '#000',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

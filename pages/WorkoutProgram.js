@@ -9,8 +9,10 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  Modal,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import Icon from "react-native-vector-icons/Ionicons";
 
 const { width } = Dimensions.get("window");
 
@@ -36,6 +38,17 @@ const WorkoutProgram = ({ route }) => {
   const pan = useRef(new Animated.ValueXY()).current;
   const itemHeight = 150;
   const scrollOffset = useRef(0);
+  const [weekNames, setWeekNames] = useState(
+    Array(totalWeeks)
+      .fill("")
+      .map((_, i) => `Week ${i + 1}`)
+  );
+  const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(null);
+  const [tempWeekName, setTempWeekName] = useState("");
+  const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] =
+    useState(false);
+  const [tempBlockName, setTempBlockName] = useState(block.name);
 
   const handleScroll = (event) => {
     if (isProgrammaticScroll) return; // Skip if programmatic scroll
@@ -281,6 +294,28 @@ const WorkoutProgram = ({ route }) => {
     );
   };
 
+  const handleRenameWeek = (index) => {
+    setSelectedWeekIndex(index);
+    setTempWeekName(weekNames[index]);
+    setIsRenameModalVisible(true);
+  };
+
+  const saveWeekName = () => {
+    if (selectedWeekIndex !== null && tempWeekName.trim()) {
+      const newWeekNames = [...weekNames];
+      newWeekNames[selectedWeekIndex] = tempWeekName.trim();
+      setWeekNames(newWeekNames);
+    }
+    setIsRenameModalVisible(false);
+  };
+
+  const saveBlockName = () => {
+    if (tempBlockName.trim()) {
+      block.name = tempBlockName.trim();
+    }
+    setIsBlockRenameModalVisible(false);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -291,7 +326,15 @@ const WorkoutProgram = ({ route }) => {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>{block.name}</Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>{block.name}</Text>
+          <TouchableOpacity
+            style={styles.blockRenameButton}
+            onPress={() => setIsBlockRenameModalVisible(true)}
+          >
+            <Icon name="pencil-outline" size={16} color="#666" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.weekHeader}>
           <Text style={styles.subtitle}>
             {block.startDate} - {block.endDate}
@@ -437,36 +480,113 @@ const WorkoutProgram = ({ route }) => {
           {Array(totalWeeks)
             .fill(null)
             .map((_, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.weekButton,
-                  currentWeek === index + 1 && styles.weekButtonActive,
-                ]}
-                onPress={() => {
-                  setIsProgrammaticScroll(true);
-                  setCurrentWeek(index + 1);
-                  scrollViewRef.current?.scrollTo({
-                    x: index * width,
-                    animated: true,
-                  });
-                  setTimeout(() => {
-                    setIsProgrammaticScroll(false);
-                  }, 500);
-                }}
-              >
-                <Text
+              <View key={index} style={styles.weekButtonWrapper}>
+                <TouchableOpacity
                   style={[
-                    styles.weekButtonText,
-                    currentWeek === index + 1 && styles.weekButtonTextActive,
+                    styles.weekButton,
+                    currentWeek === index + 1 && styles.weekButtonActive,
                   ]}
+                  onPress={() => {
+                    setIsProgrammaticScroll(true);
+                    setCurrentWeek(index + 1);
+                    scrollViewRef.current?.scrollTo({
+                      x: index * width,
+                      animated: true,
+                    });
+                    setTimeout(() => {
+                      setIsProgrammaticScroll(false);
+                    }, 500);
+                  }}
                 >
-                  Week {index + 1}
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.weekButtonText,
+                      currentWeek === index + 1 && styles.weekButtonTextActive,
+                    ]}
+                  >
+                    {weekNames[index]}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.renameButton}
+                  onPress={() => handleRenameWeek(index)}
+                >
+                  <Icon name="pencil-outline" size={14} color="#666" />
+                </TouchableOpacity>
+              </View>
             ))}
         </ScrollView>
       </View>
+
+      <Modal visible={isRenameModalVisible} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsRenameModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rename Week</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempWeekName}
+              onChangeText={setTempWeekName}
+              placeholder="Enter week name"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setIsRenameModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={saveWeekName}
+              >
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={isBlockRenameModalVisible}
+        transparent
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsBlockRenameModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rename Block</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempBlockName}
+              onChangeText={setTempBlockName}
+              placeholder="Enter block name"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setIsBlockRenameModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={saveBlockName}
+              >
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -488,6 +608,11 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 28,
     color: "#000",
+  },
+  titleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   title: {
     fontSize: 28,
@@ -654,6 +779,11 @@ const styles = StyleSheet.create({
     gap: 8,
     flexDirection: "row",
   },
+  weekButtonWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   weekButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -719,6 +849,69 @@ const styles = StyleSheet.create({
   dragHandleActive: {
     backgroundColor: "#f0f0f0",
     borderRadius: 8,
+  },
+  renameButton: {
+    padding: 4,
+    opacity: 0.6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 24,
+    width: "80%",
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginBottom: 16,
+    color: "#000",
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#f0f0f0",
+  },
+  saveButton: {
+    backgroundColor: "#000",
+  },
+  cancelButtonText: {
+    color: "#666",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  saveButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  blockRenameButton: {
+    padding: 4,
+    opacity: 0.6,
   },
 });
 
