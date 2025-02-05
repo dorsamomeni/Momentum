@@ -14,7 +14,7 @@ const { width } = Dimensions.get("window");
 
 const WorkoutProgram = ({ route }) => {
   const navigation = useNavigation();
-  const { block, onCloseBlock } = route.params;
+  const { block, onCloseBlock, isPreviousBlock, onReopenBlock } = route.params;
   const days = Array(block.sessionsPerWeek).fill(null);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [totalWeeks, setTotalWeeks] = useState(block.weeks?.length || 1);
@@ -116,6 +116,13 @@ const WorkoutProgram = ({ route }) => {
     }
   };
 
+  const handleReopenBlock = () => {
+    // Call the callback to update the parent state
+    onReopenBlock(block);
+    // Navigate back to the client details screen
+    navigation.goBack();
+  };
+
   const handleCloseBlock = () => {
     // Call the callback to update the parent state
     onCloseBlock(block);
@@ -174,14 +181,25 @@ const WorkoutProgram = ({ route }) => {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, styles.closeButton]}
-            onPress={handleCloseBlock}
-          >
-            <Text style={[styles.actionButtonText, styles.closeButtonText]}>
-              Close
-            </Text>
-          </TouchableOpacity>
+          {isPreviousBlock ? (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.primaryButton]}
+              onPress={handleReopenBlock}
+            >
+              <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
+                Reopen
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.closeButton]}
+              onPress={handleCloseBlock}
+            >
+              <Text style={[styles.actionButtonText, styles.closeButtonText]}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

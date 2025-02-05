@@ -7,15 +7,15 @@ const ClientDetails = ({ route }) => {
   const navigation = useNavigation();
   const { client } = route.params;
 
-  // Convert mock data to state
-  const [currentBlock, setCurrentBlock] = useState({
+  // Change currentBlock to activeBlocks array
+  const [activeBlocks, setActiveBlocks] = useState([{
     id: 1,
     name: "Strength Block",
     startDate: "Mar 1, 2024",
     endDate: "Mar 28, 2024",
     status: "active",
     sessionsPerWeek: 3,
-  });
+  }]);
   
   const [previousBlocks, setPreviousBlocks] = useState([
     {
@@ -700,12 +700,9 @@ const ClientDetails = ({ route }) => {
 
   const handleNewBlock = (blockName, sessionsPerWeek) => {
     // Move current block to previous blocks if it exists
-    if (currentBlock) {
+    if (activeBlocks.length > 0) {
       setPreviousBlocks([
-        {
-          ...currentBlock,
-          status: "completed"
-        },
+        ...activeBlocks,
         ...previousBlocks,
       ]);
     }
@@ -729,11 +726,11 @@ const ClientDetails = ({ route }) => {
       }]
     };
 
-    setCurrentBlock(newBlock);
+    setActiveBlocks([newBlock]);
   };
 
   const handleCloseBlock = (blockToClose) => {
-    // Move current block to previous blocks
+    // Move block to previous blocks
     setPreviousBlocks([
       {
         ...blockToClose,
@@ -742,8 +739,19 @@ const ClientDetails = ({ route }) => {
       ...previousBlocks,
     ]);
     
-    // Clear current block
-    setCurrentBlock(null);
+    // Remove from active blocks
+    setActiveBlocks(activeBlocks.filter(block => block.id !== blockToClose.id));
+  };
+
+  const handleReopenBlock = (blockToReopen) => {
+    // Remove from previous blocks
+    setPreviousBlocks(previousBlocks.filter(block => block.id !== blockToReopen.id));
+    
+    // Add to active blocks
+    setActiveBlocks([...activeBlocks, {
+      ...blockToReopen,
+      status: "active"
+    }]);
   };
 
   return (
@@ -777,29 +785,33 @@ const ClientDetails = ({ route }) => {
         </View>
 
         <View style={styles.blocksSection}>
-          <Text style={styles.sectionTitle}>Current Block</Text>
-          {currentBlock ? (
-            <TouchableOpacity
-              style={styles.blockCard}
-              onPress={() => navigation.navigate("WorkoutProgram", {
-                block: currentBlock,
-                onCloseBlock: handleCloseBlock
-              })}
-            >
-              <View style={styles.blockHeader}>
-                <Text style={styles.blockName}>{currentBlock.name}</Text>
-                <View style={styles.statusBadge}>
-                  <Icon name="radio-button-on" size={16} color="#4CAF50" />
-                  <Text style={styles.statusText}>Active</Text>
+          <Text style={styles.sectionTitle}>Active Blocks</Text>
+          {activeBlocks.length > 0 ? (
+            activeBlocks.map((block) => (
+              <TouchableOpacity
+                key={block.id}
+                style={styles.blockCard}
+                onPress={() => navigation.navigate("WorkoutProgram", {
+                  block,
+                  onCloseBlock: handleCloseBlock,
+                  isPreviousBlock: false
+                })}
+              >
+                <View style={styles.blockHeader}>
+                  <Text style={styles.blockName}>{block.name}</Text>
+                  <View style={styles.statusBadge}>
+                    <Icon name="radio-button-on" size={16} color="#4CAF50" />
+                    <Text style={styles.statusText}>Active</Text>
+                  </View>
                 </View>
-              </View>
-              <Text style={styles.dateText}>
-                {currentBlock.startDate} - {currentBlock.endDate}
-              </Text>
-            </TouchableOpacity>
+                <Text style={styles.dateText}>
+                  {block.startDate} - {block.endDate}
+                </Text>
+              </TouchableOpacity>
+            ))
           ) : (
             <View style={styles.noBlockContainer}>
-              <Text style={styles.noBlockText}>No active training block</Text>
+              <Text style={styles.noBlockText}>No active training blocks</Text>
             </View>
           )}
 
@@ -808,7 +820,11 @@ const ClientDetails = ({ route }) => {
             <TouchableOpacity
               key={block.id}
               style={styles.blockCard}
-              onPress={() => navigation.navigate("WorkoutProgram", { block })}
+              onPress={() => navigation.navigate("WorkoutProgram", {
+                block,
+                onReopenBlock: handleReopenBlock,
+                isPreviousBlock: true
+              })}
             >
               <View style={styles.blockHeader}>
                 <Text style={styles.blockName}>{block.name}</Text>
