@@ -63,6 +63,32 @@ const WorkoutProgram = ({ route }) => {
     }, 500); // Adjust timing if needed
   };
 
+  const handleCopyWeek = () => {
+    // Create a deep copy of the current week
+    const weekToCopy = JSON.parse(JSON.stringify(blockWeeks[currentWeek - 1]));
+    const newTotalWeeks = totalWeeks + 1;
+
+    setIsProgrammaticScroll(true);
+
+    // Add the copied week to the end of blockWeeks and update states
+    setBlockWeeks([...blockWeeks, weekToCopy]);
+    setTotalWeeks(newTotalWeeks);
+
+    // Use requestAnimationFrame to ensure state updates have processed
+    requestAnimationFrame(() => {
+      setCurrentWeek(newTotalWeeks);
+      scrollViewRef.current?.scrollTo({
+        x: (newTotalWeeks - 1) * width,
+        animated: true,
+      });
+
+      // Reset scroll flag after animation
+      setTimeout(() => {
+        setIsProgrammaticScroll(false);
+      }, 500);
+    });
+  };
+
   const handleDeleteWeek = () => {
     if (totalWeeks > 1) {
       // Remove the current week from blockWeeks
@@ -118,9 +144,7 @@ const WorkoutProgram = ({ route }) => {
 
           <TouchableOpacity
             style={[styles.actionButton, styles.primaryButton]}
-            onPress={() => {
-              // Handle duplicate
-            }}
+            onPress={handleCopyWeek}
           >
             <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
               Copy
