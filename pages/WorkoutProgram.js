@@ -130,6 +130,22 @@ const WorkoutProgram = ({ route }) => {
     navigation.goBack();
   };
 
+  const handleAddExercise = (weekIndex, dayIndex) => {
+    const newExercise = {
+      name: "",
+      scheme: "",
+      weight: "",
+      notes: "",
+    };
+
+    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks)); // Deep copy
+    if (!updatedWeeks[weekIndex].exercises[dayIndex].exercises) {
+      updatedWeeks[weekIndex].exercises[dayIndex].exercises = [];
+    }
+    updatedWeeks[weekIndex].exercises[dayIndex].exercises.push(newExercise);
+    setBlockWeeks(updatedWeeks);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -224,9 +240,7 @@ const WorkoutProgram = ({ route }) => {
                       <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
                       <TouchableOpacity
                         style={styles.addExerciseButton}
-                        onPress={() => {
-                          // Handle adding new exercise
-                        }}
+                        onPress={() => handleAddExercise(weekIndex, dayIndex)}
                       >
                         <Text style={styles.addExerciseIcon}>+</Text>
                       </TouchableOpacity>
@@ -281,9 +295,9 @@ const WorkoutProgram = ({ route }) => {
                         <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
                         <TouchableOpacity
                           style={styles.addExerciseButton}
-                          onPress={() => {
-                            // Handle adding new exercise
-                          }}
+                          onPress={() =>
+                            handleAddExercise(currentWeek - 1, dayIndex)
+                          }
                         >
                           <Text style={styles.addExerciseIcon}>+</Text>
                         </TouchableOpacity>
