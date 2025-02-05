@@ -18,48 +18,72 @@ const WorkoutProgram = ({ route }) => {
   const days = Array(block.sessionsPerWeek).fill(null);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [totalWeeks, setTotalWeeks] = useState(block.weeks?.length || 1);
-  const [blockWeeks, setBlockWeeks] = useState(block.weeks || [{
-    exercises: Array(block.sessionsPerWeek).fill({
-      exercises: []
-    })
-  }]);
+  const [blockWeeks, setBlockWeeks] = useState(
+    block.weeks || [
+      {
+        exercises: Array(block.sessionsPerWeek).fill({
+          exercises: [],
+        }),
+      },
+    ]
+  );
   const weeks = Array(totalWeeks).fill(null);
   const scrollViewRef = useRef(null);
+  const [isProgrammaticScroll, setIsProgrammaticScroll] = useState(false);
 
   const handleScroll = (event) => {
+    if (isProgrammaticScroll) return; // Skip if programmatic scroll
     const xOffset = event.nativeEvent.contentOffset.x;
     const week = Math.round(xOffset / width) + 1;
     setCurrentWeek(week);
   };
 
   const handleAddWeek = () => {
-    // Create a new empty week with the correct structure
     const newWeek = {
       exercises: Array(block.sessionsPerWeek).fill({
-        exercises: []
-      })
+        exercises: [],
+      }),
     };
 
-    // Update weeks using state setter
+    const newTotalWeeks = totalWeeks + 1;
+
     setBlockWeeks([...blockWeeks, newWeek]);
-    setTotalWeeks(totalWeeks + 1);
-    setCurrentWeek(totalWeeks + 1);
+    setTotalWeeks(newTotalWeeks);
+    setCurrentWeek(newTotalWeeks);
+
+    setIsProgrammaticScroll(true); // Set flag before scrolling
     scrollViewRef.current?.scrollTo({
-      x: totalWeeks * width,
+      x: (newTotalWeeks - 1) * width,
       animated: true,
     });
+
+    // Reset flag after animation completes
+    setTimeout(() => {
+      setIsProgrammaticScroll(false);
+    }, 500); // Adjust timing if needed
   };
 
   const handleDeleteWeek = () => {
     if (totalWeeks > 1) {
-      // Don't allow deleting if only one week remains
+      // Remove the current week from blockWeeks
+      const updatedWeeks = [...blockWeeks];
+      updatedWeeks.splice(currentWeek - 1, 1);
+      setBlockWeeks(updatedWeeks);
+
       setTotalWeeks(totalWeeks - 1);
 
-      // If deleting current week, move to previous week
+      // If deleting last week, move to previous week
       if (currentWeek === totalWeeks) {
         setCurrentWeek(currentWeek - 1);
         scrollViewRef.current?.scrollTo({
           x: (currentWeek - 2) * width,
+          animated: true,
+        });
+      } else {
+        // Stay on same position but update week number since current week was deleted
+        setCurrentWeek(currentWeek);
+        scrollViewRef.current?.scrollTo({
+          x: (currentWeek - 1) * width,
           animated: true,
         });
       }
@@ -87,12 +111,7 @@ const WorkoutProgram = ({ route }) => {
             style={[styles.actionButton, styles.primaryButton]}
             onPress={handleAddWeek}
           >
-            <Text
-              style={[
-                styles.actionButtonText,
-                styles.primaryButtonText,
-              ]}
-            >
+            <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
               New
             </Text>
           </TouchableOpacity>
