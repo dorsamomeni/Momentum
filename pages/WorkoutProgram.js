@@ -18,6 +18,11 @@ const WorkoutProgram = ({ route }) => {
   const days = Array(block.sessionsPerWeek).fill(null);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [totalWeeks, setTotalWeeks] = useState(block.weeks?.length || 1);
+  const [blockWeeks, setBlockWeeks] = useState(block.weeks || [{
+    exercises: Array(block.sessionsPerWeek).fill({
+      exercises: []
+    })
+  }]);
   const weeks = Array(totalWeeks).fill(null);
   const scrollViewRef = useRef(null);
 
@@ -28,15 +33,21 @@ const WorkoutProgram = ({ route }) => {
   };
 
   const handleAddWeek = () => {
-    if (totalWeeks < 4) {
-      // Maximum 4 weeks
-      setTotalWeeks(totalWeeks + 1);
-      setCurrentWeek(totalWeeks + 1); // Switch to new week
-      scrollViewRef.current?.scrollTo({
-        x: totalWeeks * width,
-        animated: true,
-      });
-    }
+    // Create a new empty week with the correct structure
+    const newWeek = {
+      exercises: Array(block.sessionsPerWeek).fill({
+        exercises: []
+      })
+    };
+
+    // Update weeks using state setter
+    setBlockWeeks([...blockWeeks, newWeek]);
+    setTotalWeeks(totalWeeks + 1);
+    setCurrentWeek(totalWeeks + 1);
+    scrollViewRef.current?.scrollTo({
+      x: totalWeeks * width,
+      animated: true,
+    });
   };
 
   const handleDeleteWeek = () => {
@@ -75,13 +86,11 @@ const WorkoutProgram = ({ route }) => {
           <TouchableOpacity
             style={[styles.actionButton, styles.primaryButton]}
             onPress={handleAddWeek}
-            disabled={totalWeeks >= 4}
           >
             <Text
               style={[
                 styles.actionButtonText,
                 styles.primaryButtonText,
-                totalWeeks >= 4 && styles.disabledButtonText,
               ]}
             >
               New
@@ -141,9 +150,9 @@ const WorkoutProgram = ({ route }) => {
             key={weekIndex}
             style={[styles.programContainer, { width }]}
           >
-            {block.weeks
+            {blockWeeks
               ? // For existing blocks with data
-                block.weeks[weekIndex].exercises.map((day, dayIndex) => (
+                blockWeeks[weekIndex].exercises.map((day, dayIndex) => (
                   <View key={dayIndex} style={styles.daySection}>
                     <View style={styles.dayHeader}>
                       <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
