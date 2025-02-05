@@ -754,6 +754,19 @@ const ClientDetails = ({ route }) => {
     }]);
   };
 
+  const handleDuplicateBlock = (blockToDuplicate) => {
+    const duplicatedBlock = {
+      ...JSON.parse(JSON.stringify(blockToDuplicate)),
+      id: Date.now(), // Generate a new unique ID
+      name: `${blockToDuplicate.name} (Copy)`,
+      startDate: "", // Clear dates as they'll need to be set
+      endDate: "",
+      status: "active"
+    };
+
+    setActiveBlocks([...activeBlocks, duplicatedBlock]);
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -799,9 +812,17 @@ const ClientDetails = ({ route }) => {
               >
                 <View style={styles.blockHeader}>
                   <Text style={styles.blockName}>{block.name}</Text>
-                  <View style={styles.statusBadge}>
-                    <Icon name="radio-button-on" size={16} color="#4CAF50" />
-                    <Text style={styles.statusText}>Active</Text>
+                  <View style={styles.blockActions}>
+                    <TouchableOpacity
+                      style={styles.duplicateButton}
+                      onPress={() => handleDuplicateBlock(block)}
+                    >
+                      <Icon name="copy-outline" size={18} color="#4CAF50" />
+                    </TouchableOpacity>
+                    <View style={styles.statusBadge}>
+                      <Icon name="radio-button-on" size={16} color="#4CAF50" />
+                      <Text style={styles.statusText}>Active</Text>
+                    </View>
                   </View>
                 </View>
                 <Text style={styles.dateText}>
@@ -828,11 +849,19 @@ const ClientDetails = ({ route }) => {
             >
               <View style={styles.blockHeader}>
                 <Text style={styles.blockName}>{block.name}</Text>
-                <View style={styles.statusBadge}>
-                  <Icon name="checkmark-circle" size={16} color="#666" />
-                  <Text style={[styles.statusText, styles.completedText]}>
-                    Completed
-                  </Text>
+                <View style={styles.blockActions}>
+                  <TouchableOpacity
+                    style={styles.duplicateButton}
+                    onPress={() => handleDuplicateBlock(block)}
+                  >
+                    <Icon name="copy-outline" size={18} color="#666" />
+                  </TouchableOpacity>
+                  <View style={styles.statusBadge}>
+                    <Icon name="checkmark-circle" size={16} color="#666" />
+                    <Text style={[styles.statusText, styles.completedText]}>
+                      Completed
+                    </Text>
+                  </View>
                 </View>
               </View>
               <Text style={styles.dateText}>
@@ -956,6 +985,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     fontStyle: 'italic',
+  },
+  blockActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  duplicateButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'transparent',
+    opacity: 0.6,
+    marginRight: -2,
   },
 });
 

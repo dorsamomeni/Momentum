@@ -7,6 +7,8 @@ import {
   ScrollView,
   TextInput,
   Dimensions,
+  Animated,
+  PanResponder,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 
@@ -30,6 +32,10 @@ const WorkoutProgram = ({ route }) => {
   const weeks = Array(totalWeeks).fill(null);
   const scrollViewRef = useRef(null);
   const [isProgrammaticScroll, setIsProgrammaticScroll] = useState(false);
+  const [draggingIndex, setDraggingIndex] = useState(null);
+  const pan = useRef(new Animated.ValueXY()).current;
+  const itemHeight = 150;
+  const scrollOffset = useRef(0);
 
   const handleScroll = (event) => {
     if (isProgrammaticScroll) return; // Skip if programmatic scroll
@@ -146,6 +152,135 @@ const WorkoutProgram = ({ route }) => {
     setBlockWeeks(updatedWeeks);
   };
 
+  const moveItem = (fromIndex, toIndex, weekIndex, dayIndex) => {
+    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
+    const exercises = updatedWeeks[weekIndex].exercises[dayIndex].exercises;
+    const [movedItem] = exercises.splice(fromIndex, 1);
+    exercises.splice(toIndex, 0, movedItem);
+    setBlockWeeks(updatedWeeks);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: 0,
+          y: pan.y._value,
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event([null, { dy: pan.y }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: (_, gesture) => {
+        pan.flattenOffset();
+
+        const currentOffset = scrollOffset.current;
+        const movePosition = gesture.dy + currentOffset;
+        const movedBy = Math.round(movePosition / itemHeight);
+
+        const newIndex = Math.max(
+          0,
+          Math.min(
+            draggingIndex + movedBy,
+            blockWeeks[currentWeek - 1].exercises[draggingIndex].exercises
+              .length - 1
+          )
+        );
+
+        if (newIndex !== draggingIndex) {
+          moveItem(draggingIndex, newIndex, currentWeek - 1, draggingIndex);
+        }
+
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
+          friction: 5,
+        }).start(() => {
+          setDraggingIndex(null);
+        });
+      },
+    })
+  ).current;
+
+  const ExerciseItem = ({ exercise, index, weekIndex, dayIndex }) => {
+    const isDragging = draggingIndex === index;
+    const itemStyle = isDragging
+      ? {
+          transform: pan.getTranslateTransform(),
+          elevation: 5,
+          shadowColor: "#000",
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 5 },
+          zIndex: 999,
+          backgroundColor: "#fff",
+          scale: pan.y.interpolate({
+            inputRange: [-200, 0, 200],
+            outputRange: [0.95, 1, 0.95],
+          }),
+        }
+      : {};
+
+    return (
+      <Animated.View
+        style={[
+          styles.exercise,
+          itemStyle,
+          isDragging && { position: "absolute", left: 0, right: 0 },
+        ]}
+        {...(isDragging ? panResponder.panHandlers : {})}
+      >
+        <View style={styles.exerciseContent}>
+          <View style={styles.exerciseNameRow}>
+            <TextInput
+              style={styles.exerciseNameInput}
+              defaultValue={exercise.name}
+              placeholder="Exercise name"
+              editable={!isDragging}
+            />
+            <TouchableOpacity
+              style={[styles.dragHandle, isDragging && styles.dragHandleActive]}
+              onLongPress={() => setDraggingIndex(index)}
+            >
+              <Text style={styles.dragHandleText}>☰</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.exerciseDetails}>
+            <View style={styles.setScheme}>
+              <TextInput
+                style={styles.schemeInput}
+                defaultValue={exercise.scheme}
+                placeholder="Sets x Reps @ RPE"
+              />
+            </View>
+            <View style={styles.weightInput}>
+              <Text style={styles.weightLabel}>Weight:</Text>
+              <TextInput
+                style={styles.weightTextInput}
+                defaultValue={exercise.weight}
+                keyboardType="numeric"
+                placeholder="0"
+              />
+              <Text style={styles.weightUnit}>kg</Text>
+            </View>
+          </View>
+          <View style={styles.noteContainer}>
+            <Text style={styles.noteLabel}>Notes:</Text>
+            <TextInput
+              style={styles.noteInput}
+              defaultValue={exercise.notes}
+              placeholder="Add notes here"
+              multiline
+            />
+          </View>
+        </View>
+      </Animated.View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -247,41 +382,13 @@ const WorkoutProgram = ({ route }) => {
                     </View>
                     <View style={styles.exercisesContainer}>
                       {day.exercises.map((exercise, index) => (
-                        <View key={index} style={styles.exercise}>
-                          <TextInput
-                            style={styles.exerciseNameInput}
-                            defaultValue={exercise.name}
-                            placeholder="Exercise name"
-                          />
-                          <View style={styles.exerciseDetails}>
-                            <View style={styles.setScheme}>
-                              <TextInput
-                                style={styles.schemeInput}
-                                defaultValue={exercise.scheme}
-                                placeholder="Sets x Reps @ RPE"
-                              />
-                            </View>
-                            <View style={styles.weightInput}>
-                              <Text style={styles.weightLabel}>Weight:</Text>
-                              <TextInput
-                                style={styles.weightTextInput}
-                                defaultValue={exercise.weight}
-                                keyboardType="numeric"
-                                placeholder="0"
-                              />
-                              <Text style={styles.weightUnit}>kg</Text>
-                            </View>
-                          </View>
-                          <View style={styles.noteContainer}>
-                            <Text style={styles.noteLabel}>Notes:</Text>
-                            <TextInput
-                              style={styles.noteInput}
-                              defaultValue={exercise.notes}
-                              placeholder="Add notes here"
-                              multiline
-                            />
-                          </View>
-                        </View>
+                        <ExerciseItem
+                          key={index}
+                          exercise={exercise}
+                          index={index}
+                          weekIndex={weekIndex}
+                          dayIndex={dayIndex}
+                        />
                       ))}
                     </View>
                   </View>
@@ -303,38 +410,17 @@ const WorkoutProgram = ({ route }) => {
                         </TouchableOpacity>
                       </View>
                       <View style={styles.exercisesContainer}>
-                        <View style={styles.exercise}>
-                          <TextInput
-                            style={styles.exerciseNameInput}
-                            placeholder="Exercise name"
-                          />
-                          <View style={styles.exerciseDetails}>
-                            <View style={styles.setScheme}>
-                              <TextInput
-                                style={styles.schemeInput}
-                                placeholder="Sets x Reps @ RPE"
-                              />
-                            </View>
-                            <View style={styles.weightInput}>
-                              <Text style={styles.weightLabel}>Weight:</Text>
-                              <TextInput
-                                style={styles.weightTextInput}
-                                defaultValue="0"
-                                keyboardType="numeric"
-                                placeholder="0"
-                              />
-                              <Text style={styles.weightUnit}>kg</Text>
-                            </View>
-                          </View>
-                          <View style={styles.noteContainer}>
-                            <Text style={styles.noteLabel}>Notes:</Text>
-                            <TextInput
-                              style={styles.noteInput}
-                              placeholder="Add notes here"
-                              multiline
-                            />
-                          </View>
-                        </View>
+                        <ExerciseItem
+                          exercise={{
+                            name: "",
+                            scheme: "",
+                            weight: "0",
+                            notes: "",
+                          }}
+                          index={0}
+                          weekIndex={currentWeek - 1}
+                          dayIndex={dayIndex}
+                        />
                       </View>
                     </View>
                   ))}
@@ -343,20 +429,43 @@ const WorkoutProgram = ({ route }) => {
       </ScrollView>
 
       <View style={styles.weekNavigation}>
-        <View style={styles.dotsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.weeksContainer}
+        >
           {Array(totalWeeks)
             .fill(null)
             .map((_, index) => (
-              <View
+              <TouchableOpacity
                 key={index}
                 style={[
-                  styles.dot,
-                  currentWeek === index + 1 && styles.dotActive,
+                  styles.weekButton,
+                  currentWeek === index + 1 && styles.weekButtonActive,
                 ]}
-              />
+                onPress={() => {
+                  setIsProgrammaticScroll(true);
+                  setCurrentWeek(index + 1);
+                  scrollViewRef.current?.scrollTo({
+                    x: index * width,
+                    animated: true,
+                  });
+                  setTimeout(() => {
+                    setIsProgrammaticScroll(false);
+                  }, 500);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.weekButtonText,
+                    currentWeek === index + 1 && styles.weekButtonTextActive,
+                  ]}
+                >
+                  Week {index + 1}
+                </Text>
+              </TouchableOpacity>
             ))}
-        </View>
-        <Text style={styles.weekLabel}>Week {currentWeek}</Text>
+        </ScrollView>
       </View>
     </View>
   );
@@ -427,17 +536,45 @@ const styles = StyleSheet.create({
   exercise: {
     backgroundColor: "#fff",
     borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  exerciseContent: {
+    flex: 1,
+    padding: 16,
+  },
+  exerciseNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
   exerciseNameInput: {
+    flex: 1,
     fontSize: 17,
     fontWeight: "600",
     color: "#000",
-    marginBottom: 12,
     padding: 0,
+  },
+  dragHandle: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  dragHandleText: {
+    fontSize: 24,
+    color: "#000",
+    fontWeight: "bold",
   },
   exerciseDetails: {
     flexDirection: "row",
@@ -507,33 +644,35 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   weekNavigation: {
-    alignItems: "center",
-    paddingVertical: 24,
+    paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
     backgroundColor: "#fff",
   },
-  dotsContainer: {
+  weeksContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
     flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 12,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#e0e0e0",
+  weekButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: "#f8f8f8",
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
-  dotActive: {
-    width: 24,
+  weekButtonActive: {
     backgroundColor: "#000",
+    borderColor: "#000",
   },
-  weekLabel: {
-    fontSize: 13,
+  weekButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
     color: "#666",
-    fontWeight: "500",
+  },
+  weekButtonTextActive: {
+    color: "#fff",
   },
   actionsContainer: {
     flexDirection: "row",
@@ -576,6 +715,10 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     opacity: 0.5,
+  },
+  dragHandleActive: {
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
   },
 });
 
