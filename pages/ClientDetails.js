@@ -732,6 +732,20 @@ const ClientDetails = ({ route }) => {
     setCurrentBlock(newBlock);
   };
 
+  const handleCloseBlock = (blockToClose) => {
+    // Move current block to previous blocks
+    setPreviousBlocks([
+      {
+        ...blockToClose,
+        status: "completed"
+      },
+      ...previousBlocks,
+    ]);
+    
+    // Clear current block
+    setCurrentBlock(null);
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -764,21 +778,30 @@ const ClientDetails = ({ route }) => {
 
         <View style={styles.blocksSection}>
           <Text style={styles.sectionTitle}>Current Block</Text>
-          <TouchableOpacity
-            style={styles.blockCard}
-            onPress={() => navigation.navigate("WorkoutProgram", { block: currentBlock })}
-          >
-            <View style={styles.blockHeader}>
-              <Text style={styles.blockName}>{currentBlock.name}</Text>
-              <View style={styles.statusBadge}>
-                <Icon name="radio-button-on" size={16} color="#4CAF50" />
-                <Text style={styles.statusText}>Active</Text>
+          {currentBlock ? (
+            <TouchableOpacity
+              style={styles.blockCard}
+              onPress={() => navigation.navigate("WorkoutProgram", {
+                block: currentBlock,
+                onCloseBlock: handleCloseBlock
+              })}
+            >
+              <View style={styles.blockHeader}>
+                <Text style={styles.blockName}>{currentBlock.name}</Text>
+                <View style={styles.statusBadge}>
+                  <Icon name="radio-button-on" size={16} color="#4CAF50" />
+                  <Text style={styles.statusText}>Active</Text>
+                </View>
               </View>
+              <Text style={styles.dateText}>
+                {currentBlock.startDate} - {currentBlock.endDate}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.noBlockContainer}>
+              <Text style={styles.noBlockText}>No active training block</Text>
             </View>
-            <Text style={styles.dateText}>
-              {currentBlock.startDate} - {currentBlock.endDate}
-            </Text>
-          </TouchableOpacity>
+          )}
 
           <Text style={[styles.sectionTitle, styles.previousTitle]}>Previous Blocks</Text>
           {previousBlocks.map((block) => (
@@ -904,6 +927,19 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  noBlockContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: '#f8f8f8',
+    marginVertical: 10,
+  },
+  noBlockText: {
+    fontSize: 16,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
 

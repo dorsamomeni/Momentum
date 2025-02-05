@@ -14,7 +14,7 @@ const { width } = Dimensions.get("window");
 
 const WorkoutProgram = ({ route }) => {
   const navigation = useNavigation();
-  const { block } = route.params;
+  const { block, onCloseBlock } = route.params;
   const days = Array(block.sessionsPerWeek).fill(null);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [totalWeeks, setTotalWeeks] = useState(block.weeks?.length || 1);
@@ -116,6 +116,13 @@ const WorkoutProgram = ({ route }) => {
     }
   };
 
+  const handleCloseBlock = () => {
+    // Call the callback to update the parent state
+    onCloseBlock(block);
+    // Navigate back to the client details screen
+    navigation.goBack();
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -169,9 +176,7 @@ const WorkoutProgram = ({ route }) => {
 
           <TouchableOpacity
             style={[styles.actionButton, styles.closeButton]}
-            onPress={() => {
-              // Handle close block
-            }}
+            onPress={handleCloseBlock}
           >
             <Text style={[styles.actionButtonText, styles.closeButtonText]}>
               Close
