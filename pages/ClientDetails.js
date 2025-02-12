@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  TextInput,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 
@@ -8,15 +16,17 @@ const ClientDetails = ({ route }) => {
   const { client } = route.params;
 
   // Change currentBlock to activeBlocks array
-  const [activeBlocks, setActiveBlocks] = useState([{
-    id: 1,
-    name: "Strength Block",
-    startDate: "Mar 1, 2024",
-    endDate: "Mar 28, 2024",
-    status: "active",
-    sessionsPerWeek: 3,
-  }]);
-  
+  const [activeBlocks, setActiveBlocks] = useState([
+    {
+      id: 1,
+      name: "Strength Block",
+      startDate: "Mar 1, 2024",
+      endDate: "Mar 28, 2024",
+      status: "active",
+      sessionsPerWeek: 3,
+    },
+  ]);
+
   const [previousBlocks, setPreviousBlocks] = useState([
     {
       id: 2,
@@ -35,21 +45,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "5 x 5 @ RPE 7",
                   weight: "140",
-                  notes: "2 count pause at bottom"
+                  notes: "2 count pause at bottom",
                 },
                 {
                   name: "Tempo Squat",
                   scheme: "3 x 5 @ RPE 6",
                   weight: "120",
-                  notes: "3-1-0 tempo"
+                  notes: "3-1-0 tempo",
                 },
                 {
                   name: "Belt Squat",
                   scheme: "3 x 12",
                   weight: "80",
-                  notes: "Focus on quad drive"
-                }
-              ]
+                  notes: "Focus on quad drive",
+                },
+              ],
             },
             {
               // Day 2 - Bench Focus
@@ -58,21 +68,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Bench",
                   scheme: "5 x 5 @ RPE 7",
                   weight: "100",
-                  notes: "1 count pause"
+                  notes: "1 count pause",
                 },
                 {
                   name: "Close Grip Bench",
                   scheme: "4 x 8 @ RPE 7",
                   weight: "85",
-                  notes: "Index finger on rings"
+                  notes: "Index finger on rings",
                 },
                 {
                   name: "DB Bench",
                   scheme: "3 x 12",
                   weight: "30",
-                  notes: "Each dumbbell"
-                }
-              ]
+                  notes: "Each dumbbell",
+                },
+              ],
             },
             {
               // Day 3 - Deadlift Focus
@@ -81,21 +91,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Deadlift",
                   scheme: "5 x 3 @ RPE 7",
                   weight: "180",
-                  notes: "Dead stop each rep"
+                  notes: "Dead stop each rep",
                 },
                 {
                   name: "Paused Deadlift",
                   scheme: "3 x 3 @ RPE 6",
                   weight: "160",
-                  notes: "2 inch off floor pause"
+                  notes: "2 inch off floor pause",
                 },
                 {
                   name: "Good Morning",
                   scheme: "3 x 10",
                   weight: "60",
-                  notes: "Hinge pattern focus"
-                }
-              ]
+                  notes: "Hinge pattern focus",
+                },
+              ],
             },
             {
               // Day 4 - Variation Day
@@ -104,23 +114,23 @@ const ClientDetails = ({ route }) => {
                   name: "SSB Squat",
                   scheme: "4 x 8",
                   weight: "120",
-                  notes: "Control descent"
+                  notes: "Control descent",
                 },
                 {
                   name: "Incline Bench",
                   scheme: "4 x 10",
                   weight: "75",
-                  notes: "30 degree angle"
+                  notes: "30 degree angle",
                 },
                 {
                   name: "Block Pull",
                   scheme: "3 x 5",
                   weight: "170",
-                  notes: "3 inch blocks"
-                }
-              ]
-            }
-          ]
+                  notes: "3 inch blocks",
+                },
+              ],
+            },
+          ],
         },
         {
           exercises: [
@@ -131,15 +141,15 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "5 x 5 @ RPE 7.5",
                   weight: "145",
-                  notes: "1 count pause"
+                  notes: "1 count pause",
                 },
                 {
                   name: "Tempo Squat",
                   scheme: "3 x 5 @ RPE 7",
                   weight: "125",
-                  notes: "3-1-0 tempo"
-                }
-              ]
+                  notes: "3-1-0 tempo",
+                },
+              ],
             },
             {
               // Day 2 - Bench Focus
@@ -148,21 +158,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Bench",
                   scheme: "5 x 5 @ RPE 7.5",
                   weight: "105",
-                  notes: "1 count pause"
+                  notes: "1 count pause",
                 },
                 {
                   name: "Close Grip Bench",
                   scheme: "4 x 8 @ RPE 7",
                   weight: "85",
-                  notes: "Index finger on rings"
+                  notes: "Index finger on rings",
                 },
                 {
                   name: "DB Bench",
                   scheme: "3 x 12",
                   weight: "30",
-                  notes: "Each dumbbell"
-                }
-              ]
+                  notes: "Each dumbbell",
+                },
+              ],
             },
             {
               // Day 3 - Deadlift Focus
@@ -171,21 +181,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Deadlift",
                   scheme: "5 x 3 @ RPE 7",
                   weight: "180",
-                  notes: "Dead stop each rep"
+                  notes: "Dead stop each rep",
                 },
                 {
                   name: "Paused Deadlift",
                   scheme: "3 x 3 @ RPE 6",
                   weight: "160",
-                  notes: "2 inch off floor pause"
+                  notes: "2 inch off floor pause",
                 },
                 {
                   name: "Good Morning",
                   scheme: "3 x 10",
                   weight: "60",
-                  notes: "Hinge pattern focus"
-                }
-              ]
+                  notes: "Hinge pattern focus",
+                },
+              ],
             },
             {
               // Day 4 - Variation Day
@@ -194,23 +204,23 @@ const ClientDetails = ({ route }) => {
                   name: "SSB Squat",
                   scheme: "4 x 8",
                   weight: "120",
-                  notes: "Control descent"
+                  notes: "Control descent",
                 },
                 {
                   name: "Incline Bench",
                   scheme: "4 x 10",
                   weight: "75",
-                  notes: "30 degree angle"
+                  notes: "30 degree angle",
                 },
                 {
                   name: "Block Pull",
                   scheme: "3 x 5",
                   weight: "170",
-                  notes: "3 inch blocks"
-                }
-              ]
-            }
-          ]
+                  notes: "3 inch blocks",
+                },
+              ],
+            },
+          ],
         },
         {
           exercises: [
@@ -221,15 +231,15 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "4 x 5 @ RPE 8",
                   weight: "150",
-                  notes: "Competition commands"
+                  notes: "Competition commands",
                 },
                 {
                   name: "Tempo Squat",
                   scheme: "3 x 5 @ RPE 7.5",
                   weight: "130",
-                  notes: "3-1-0 tempo"
-                }
-              ]
+                  notes: "3-1-0 tempo",
+                },
+              ],
             },
             {
               // Day 2 - Bench Focus
@@ -238,21 +248,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Bench",
                   scheme: "4 x 5 @ RPE 8",
                   weight: "105",
-                  notes: "Competition commands"
+                  notes: "Competition commands",
                 },
                 {
                   name: "Close Grip Bench",
                   scheme: "4 x 8 @ RPE 7",
                   weight: "85",
-                  notes: "Index finger on rings"
+                  notes: "Index finger on rings",
                 },
                 {
                   name: "DB Bench",
                   scheme: "3 x 12",
                   weight: "30",
-                  notes: "Each dumbbell"
-                }
-              ]
+                  notes: "Each dumbbell",
+                },
+              ],
             },
             {
               // Day 3 - Deadlift Focus
@@ -261,21 +271,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Deadlift",
                   scheme: "5 x 3 @ RPE 7",
                   weight: "180",
-                  notes: "Dead stop each rep"
+                  notes: "Dead stop each rep",
                 },
                 {
                   name: "Paused Deadlift",
                   scheme: "3 x 3 @ RPE 6",
                   weight: "160",
-                  notes: "2 inch deficit"
+                  notes: "2 inch deficit",
                 },
                 {
                   name: "Good Morning",
                   scheme: "3 x 10",
                   weight: "60",
-                  notes: "Hinge pattern focus"
-                }
-              ]
+                  notes: "Hinge pattern focus",
+                },
+              ],
             },
             {
               // Day 4 - Variation Day
@@ -284,23 +294,23 @@ const ClientDetails = ({ route }) => {
                   name: "SSB Squat",
                   scheme: "4 x 8",
                   weight: "120",
-                  notes: "Control descent"
+                  notes: "Control descent",
                 },
                 {
                   name: "Incline Bench",
                   scheme: "4 x 10",
                   weight: "75",
-                  notes: "30 degree angle"
+                  notes: "30 degree angle",
                 },
                 {
                   name: "Block Pull",
                   scheme: "3 x 5",
                   weight: "170",
-                  notes: "3 inch blocks"
-                }
-              ]
-            }
-          ]
+                  notes: "3 inch blocks",
+                },
+              ],
+            },
+          ],
         },
         {
           exercises: [
@@ -311,15 +321,15 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "3 x 5 @ RPE 6.5",
                   weight: "135",
-                  notes: "Speed focus"
+                  notes: "Speed focus",
                 },
                 {
                   name: "Tempo Squat",
                   scheme: "2 x 5 @ RPE 6",
                   weight: "115",
-                  notes: "3-1-0 tempo"
-                }
-              ]
+                  notes: "3-1-0 tempo",
+                },
+              ],
             },
             {
               // Day 2 - Bench Focus
@@ -328,21 +338,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Bench",
                   scheme: "3 x 5 @ RPE 6.5",
                   weight: "105",
-                  notes: "Technique focus"
+                  notes: "Technique focus",
                 },
                 {
                   name: "Close Grip Bench",
                   scheme: "4 x 8 @ RPE 7",
                   weight: "85",
-                  notes: "Index finger on rings"
+                  notes: "Index finger on rings",
                 },
                 {
                   name: "DB Bench",
                   scheme: "3 x 12",
                   weight: "30",
-                  notes: "Each dumbbell"
-                }
-              ]
+                  notes: "Each dumbbell",
+                },
+              ],
             },
             {
               // Day 3 - Deadlift Focus
@@ -351,21 +361,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Deadlift",
                   scheme: "5 x 3 @ RPE 7",
                   weight: "180",
-                  notes: "Dead stop each rep"
+                  notes: "Dead stop each rep",
                 },
                 {
                   name: "Paused Deadlift",
                   scheme: "3 x 3 @ RPE 6",
                   weight: "160",
-                  notes: "2 inch deficit"
+                  notes: "2 inch deficit",
                 },
                 {
                   name: "Good Morning",
                   scheme: "3 x 10",
                   weight: "60",
-                  notes: "Hinge pattern focus"
-                }
-              ]
+                  notes: "Hinge pattern focus",
+                },
+              ],
             },
             {
               // Day 4 - Variation Day
@@ -374,25 +384,25 @@ const ClientDetails = ({ route }) => {
                   name: "SSB Squat",
                   scheme: "4 x 8",
                   weight: "120",
-                  notes: "Control descent"
+                  notes: "Control descent",
                 },
                 {
                   name: "Incline Bench",
                   scheme: "4 x 10",
                   weight: "75",
-                  notes: "30 degree angle"
+                  notes: "30 degree angle",
                 },
                 {
                   name: "Block Pull",
                   scheme: "3 x 5",
                   weight: "170",
-                  notes: "3 inch blocks"
-                }
-              ]
-            }
-          ]
-        }
-      ]
+                  notes: "3 inch blocks",
+                },
+              ],
+            },
+          ],
+        },
+      ],
     },
     {
       id: 3,
@@ -411,21 +421,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "3 x 3 @ RPE 8",
                   weight: "160",
-                  notes: "Competition commands"
+                  notes: "Competition commands",
                 },
                 {
                   name: "Competition Bench",
                   scheme: "3 x 3 @ RPE 8",
                   weight: "115",
-                  notes: "Competition pause"
+                  notes: "Competition pause",
                 },
                 {
                   name: "Competition Deadlift",
                   scheme: "2 x 2 @ RPE 8",
                   weight: "200",
-                  notes: "Competition setup"
-                }
-              ]
+                  notes: "Competition setup",
+                },
+              ],
             },
             {
               // Day 2 - Technique Work
@@ -434,21 +444,21 @@ const ClientDetails = ({ route }) => {
                   name: "Pin Squat",
                   scheme: "4 x 2 @ RPE 7",
                   weight: "150",
-                  notes: "Below parallel"
+                  notes: "Below parallel",
                 },
                 {
                   name: "Spoto Press",
                   scheme: "4 x 3 @ RPE 7",
                   weight: "105",
-                  notes: "1 inch off chest"
+                  notes: "1 inch off chest",
                 },
                 {
                   name: "Deficit Deadlift",
                   scheme: "3 x 3 @ RPE 7",
                   weight: "180",
-                  notes: "2 inch deficit"
-                }
-              ]
+                  notes: "2 inch deficit",
+                },
+              ],
             },
             {
               // Day 3 - Volume Work
@@ -457,23 +467,23 @@ const ClientDetails = ({ route }) => {
                   name: "Front Squat",
                   scheme: "3 x 5 @ RPE 7",
                   weight: "120",
-                  notes: "Maintain position"
+                  notes: "Maintain position",
                 },
                 {
                   name: "Larsen Press",
                   scheme: "3 x 6 @ RPE 7",
                   weight: "95",
-                  notes: "Feet up"
+                  notes: "Feet up",
                 },
                 {
                   name: "RDL",
                   scheme: "3 x 8 @ RPE 7",
                   weight: "150",
-                  notes: "Slow eccentric"
-                }
-              ]
-            }
-          ]
+                  notes: "Slow eccentric",
+                },
+              ],
+            },
+          ],
         },
         {
           exercises: [
@@ -484,21 +494,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "3 x 3 @ RPE 8.5",
                   weight: "165",
-                  notes: "Competition commands"
+                  notes: "Competition commands",
                 },
                 {
                   name: "Competition Bench",
                   scheme: "3 x 3 @ RPE 8.5",
                   weight: "117.5",
-                  notes: "Competition pause"
+                  notes: "Competition pause",
                 },
                 {
                   name: "Competition Deadlift",
                   scheme: "2 x 2 @ RPE 8.5",
                   weight: "200",
-                  notes: "Competition setup"
-                }
-              ]
+                  notes: "Competition setup",
+                },
+              ],
             },
             {
               // Day 2 - Technique Work
@@ -507,21 +517,21 @@ const ClientDetails = ({ route }) => {
                   name: "Pin Squat",
                   scheme: "4 x 2 @ RPE 7.5",
                   weight: "150",
-                  notes: "Below parallel"
+                  notes: "Below parallel",
                 },
                 {
                   name: "Spoto Press",
                   scheme: "4 x 3 @ RPE 7.5",
                   weight: "105",
-                  notes: "1 inch off chest"
+                  notes: "1 inch off chest",
                 },
                 {
                   name: "Deficit Deadlift",
                   scheme: "3 x 3 @ RPE 7.5",
                   weight: "180",
-                  notes: "2 inch deficit"
-                }
-              ]
+                  notes: "2 inch deficit",
+                },
+              ],
             },
             {
               // Day 3 - Volume Work
@@ -530,23 +540,23 @@ const ClientDetails = ({ route }) => {
                   name: "Front Squat",
                   scheme: "3 x 5 @ RPE 7",
                   weight: "120",
-                  notes: "Maintain position"
+                  notes: "Maintain position",
                 },
                 {
                   name: "Larsen Press",
                   scheme: "3 x 6 @ RPE 7",
                   weight: "95",
-                  notes: "Feet up"
+                  notes: "Feet up",
                 },
                 {
                   name: "RDL",
                   scheme: "3 x 8 @ RPE 7",
                   weight: "150",
-                  notes: "Slow eccentric"
-                }
-              ]
-            }
-          ]
+                  notes: "Slow eccentric",
+                },
+              ],
+            },
+          ],
         },
         {
           exercises: [
@@ -557,21 +567,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "2 x 2 @ RPE 9",
                   weight: "170",
-                  notes: "Competition commands"
+                  notes: "Competition commands",
                 },
                 {
                   name: "Competition Bench",
                   scheme: "2 x 2 @ RPE 9",
                   weight: "120",
-                  notes: "Competition pause"
+                  notes: "Competition pause",
                 },
                 {
                   name: "Competition Deadlift",
                   scheme: "2 x 2 @ RPE 9",
                   weight: "200",
-                  notes: "Competition setup"
-                }
-              ]
+                  notes: "Competition setup",
+                },
+              ],
             },
             {
               // Day 2 - Technique Work
@@ -580,21 +590,21 @@ const ClientDetails = ({ route }) => {
                   name: "Pin Squat",
                   scheme: "4 x 2 @ RPE 8",
                   weight: "150",
-                  notes: "Below parallel"
+                  notes: "Below parallel",
                 },
                 {
                   name: "Spoto Press",
                   scheme: "4 x 3 @ RPE 8",
                   weight: "105",
-                  notes: "1 inch off chest"
+                  notes: "1 inch off chest",
                 },
                 {
                   name: "Deficit Deadlift",
                   scheme: "3 x 3 @ RPE 8",
                   weight: "180",
-                  notes: "2 inch deficit"
-                }
-              ]
+                  notes: "2 inch deficit",
+                },
+              ],
             },
             {
               // Day 3 - Volume Work
@@ -603,23 +613,23 @@ const ClientDetails = ({ route }) => {
                   name: "Front Squat",
                   scheme: "3 x 5 @ RPE 7",
                   weight: "120",
-                  notes: "Maintain position"
+                  notes: "Maintain position",
                 },
                 {
                   name: "Larsen Press",
                   scheme: "3 x 6 @ RPE 7",
                   weight: "95",
-                  notes: "Feet up"
+                  notes: "Feet up",
                 },
                 {
                   name: "RDL",
                   scheme: "3 x 8 @ RPE 7",
                   weight: "150",
-                  notes: "Slow eccentric"
-                }
-              ]
-            }
-          ]
+                  notes: "Slow eccentric",
+                },
+              ],
+            },
+          ],
         },
         {
           exercises: [
@@ -630,21 +640,21 @@ const ClientDetails = ({ route }) => {
                   name: "Competition Squat",
                   scheme: "2 x 2 @ RPE 7",
                   weight: "150",
-                  notes: "Speed focus"
+                  notes: "Speed focus",
                 },
                 {
                   name: "Competition Bench",
                   scheme: "2 x 2 @ RPE 7",
                   weight: "105",
-                  notes: "Technique focus"
+                  notes: "Technique focus",
                 },
                 {
                   name: "Competition Deadlift",
                   scheme: "2 x 2 @ RPE 7",
                   weight: "180",
-                  notes: "Speed focus"
-                }
-              ]
+                  notes: "Speed focus",
+                },
+              ],
             },
             {
               // Day 2 - Technique Work
@@ -653,21 +663,21 @@ const ClientDetails = ({ route }) => {
                   name: "Pin Squat",
                   scheme: "4 x 2 @ RPE 7",
                   weight: "150",
-                  notes: "Below parallel"
+                  notes: "Below parallel",
                 },
                 {
                   name: "Spoto Press",
                   scheme: "4 x 3 @ RPE 7",
                   weight: "105",
-                  notes: "1 inch off chest"
+                  notes: "1 inch off chest",
                 },
                 {
                   name: "Deficit Deadlift",
                   scheme: "3 x 3 @ RPE 7",
                   weight: "180",
-                  notes: "2 inch deficit"
-                }
-              ]
+                  notes: "2 inch deficit",
+                },
+              ],
             },
             {
               // Day 3 - Volume Work
@@ -676,39 +686,43 @@ const ClientDetails = ({ route }) => {
                   name: "Front Squat",
                   scheme: "3 x 5 @ RPE 7",
                   weight: "120",
-                  notes: "Maintain position"
+                  notes: "Maintain position",
                 },
                 {
                   name: "Larsen Press",
                   scheme: "3 x 6 @ RPE 7",
                   weight: "95",
-                  notes: "Feet up"
+                  notes: "Feet up",
                 },
                 {
                   name: "RDL",
                   scheme: "3 x 8 @ RPE 7",
                   weight: "150",
-                  notes: "Slow eccentric"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
+                  notes: "Slow eccentric",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
   ]);
 
-  const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] = useState(false);
+  const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] =
+    useState(false);
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [tempBlockName, setTempBlockName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateFilter, setDateFilter] = useState({
+    startDate: "",
+    endDate: "",
+  });
 
   const handleNewBlock = (blockName, sessionsPerWeek) => {
     // Move current block to previous blocks if it exists
     if (activeBlocks.length > 0) {
-      setPreviousBlocks([
-        ...activeBlocks,
-        ...previousBlocks,
-      ]);
+      setPreviousBlocks([...activeBlocks, ...previousBlocks]);
     }
 
     // Create new block
@@ -719,15 +733,26 @@ const ClientDetails = ({ route }) => {
     const newBlock = {
       id: Date.now(),
       name: blockName,
-      startDate: today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      endDate: endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      startDate: today.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      endDate: endDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
       status: "active",
       sessionsPerWeek,
-      weeks: [{  // Start with just one week
-        exercises: Array(sessionsPerWeek).fill({
-          exercises: [] // Empty array for each day's exercises
-        })
-      }]
+      weeks: [
+        {
+          // Start with just one week
+          exercises: Array(sessionsPerWeek).fill({
+            exercises: [], // Empty array for each day's exercises
+          }),
+        },
+      ],
     };
 
     setActiveBlocks([newBlock]);
@@ -738,24 +763,31 @@ const ClientDetails = ({ route }) => {
     setPreviousBlocks([
       {
         ...blockToClose,
-        status: "completed"
+        status: "completed",
       },
       ...previousBlocks,
     ]);
-    
+
     // Remove from active blocks
-    setActiveBlocks(activeBlocks.filter(block => block.id !== blockToClose.id));
+    setActiveBlocks(
+      activeBlocks.filter((block) => block.id !== blockToClose.id)
+    );
   };
 
   const handleReopenBlock = (blockToReopen) => {
     // Remove from previous blocks
-    setPreviousBlocks(previousBlocks.filter(block => block.id !== blockToReopen.id));
-    
+    setPreviousBlocks(
+      previousBlocks.filter((block) => block.id !== blockToReopen.id)
+    );
+
     // Add to active blocks
-    setActiveBlocks([...activeBlocks, {
-      ...blockToReopen,
-      status: "active"
-    }]);
+    setActiveBlocks([
+      ...activeBlocks,
+      {
+        ...blockToReopen,
+        status: "active",
+      },
+    ]);
   };
 
   const handleDuplicateBlock = (blockToDuplicate) => {
@@ -765,7 +797,7 @@ const ClientDetails = ({ route }) => {
       name: `${blockToDuplicate.name} (Copy)`,
       startDate: "", // Clear dates as they'll need to be set
       endDate: "",
-      status: "active"
+      status: "active",
     };
 
     setActiveBlocks([...activeBlocks, duplicatedBlock]);
@@ -800,6 +832,49 @@ const ClientDetails = ({ route }) => {
     setIsBlockRenameModalVisible(false);
   };
 
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    const [month, day, year] = dateString.split("/");
+    return new Date(year, month - 1, day);
+  };
+
+  const isDateInRange = (blockStartDate, blockEndDate) => {
+    if (!dateFilter.startDate && !dateFilter.endDate) return true;
+
+    const blockStart = new Date(blockStartDate);
+    const blockEnd = new Date(blockEndDate);
+    const filterStart = dateFilter.startDate
+      ? parseDate(dateFilter.startDate)
+      : null;
+    const filterEnd = dateFilter.endDate ? parseDate(dateFilter.endDate) : null;
+
+    if (filterStart && filterEnd) {
+      return blockStart >= filterStart && blockEnd <= filterEnd;
+    } else if (filterStart) {
+      return blockStart >= filterStart;
+    } else if (filterEnd) {
+      return blockEnd <= filterEnd;
+    }
+    return true;
+  };
+
+  const filterBlocks = (blocks) => {
+    const query = searchQuery.toLowerCase();
+    return blocks.filter((block) => {
+      const matchesSearch = block.name.toLowerCase().includes(query);
+      const matchesDate = isDateInRange(block.startDate, block.endDate);
+      return matchesSearch && matchesDate;
+    });
+  };
+
+  const handleDeleteBlock = (blockId, isActive) => {
+    if (isActive) {
+      setActiveBlocks(activeBlocks.filter((block) => block.id !== blockId));
+    } else {
+      setPreviousBlocks(previousBlocks.filter((block) => block.id !== blockId));
+    }
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -811,18 +886,18 @@ const ClientDetails = ({ route }) => {
 
       <ScrollView>
         <View style={styles.header}>
-          <View 
+          <View
             style={[styles.profilePhoto, { backgroundColor: client.color }]}
           >
             <Text style={styles.initial}>{client.initial}</Text>
           </View>
           <Text style={styles.title}>{client.name}</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.newBlockButton}
             onPress={() => {
-              navigation.navigate("CreateBlock", { 
+              navigation.navigate("CreateBlock", {
                 client,
-                onCreateBlock: handleNewBlock 
+                onCreateBlock: handleNewBlock,
               });
             }}
           >
@@ -830,18 +905,108 @@ const ClientDetails = ({ route }) => {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.searchRow}>
+          <View style={styles.searchContainer}>
+            <Icon
+              name="search-outline"
+              size={20}
+              color="#666"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search blocks..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#666"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              (dateFilter.startDate || dateFilter.endDate) &&
+                styles.filterButtonActive,
+            ]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Icon
+              name="calendar-outline"
+              size={20}
+              color={
+                dateFilter.startDate || dateFilter.endDate ? "#000" : "#666"
+              }
+            />
+          </TouchableOpacity>
+        </View>
+
+        {showDatePicker && (
+          <View style={styles.datePickerContainer}>
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>Filter by Date</Text>
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => {
+                  setDateFilter({
+                    startDate: "",
+                    endDate: "",
+                  });
+                }}
+              >
+                <Text style={styles.clearButtonText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dateRangeContainer}>
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateRangeLabel}>Start Date</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  placeholder="MM/DD/YYYY"
+                  value={dateFilter.startDate}
+                  onChangeText={(text) => {
+                    setDateFilter((prev) => ({
+                      ...prev,
+                      startDate: text,
+                    }));
+                  }}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.dateInputWrapper}>
+                <Text style={styles.dateRangeLabel}>End Date</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  placeholder="MM/DD/YYYY"
+                  value={dateFilter.endDate}
+                  onChangeText={(text) => {
+                    setDateFilter((prev) => ({
+                      ...prev,
+                      endDate: text,
+                    }));
+                  }}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={styles.blocksSection}>
           <Text style={styles.sectionTitle}>Active Blocks</Text>
           {activeBlocks.length > 0 ? (
-            activeBlocks.map((block) => (
+            filterBlocks(activeBlocks).map((block) => (
               <TouchableOpacity
                 key={block.id}
                 style={styles.blockCard}
-                onPress={() => navigation.navigate("WorkoutProgram", {
-                  block,
-                  onCloseBlock: handleCloseBlock,
-                  isPreviousBlock: false
-                })}
+                onPress={() =>
+                  navigation.navigate("WorkoutProgram", {
+                    block,
+                    onCloseBlock: handleCloseBlock,
+                    isPreviousBlock: false,
+                  })
+                }
               >
                 <View style={styles.blockHeader}>
                   <View style={styles.blockTitleContainer}>
@@ -857,6 +1022,15 @@ const ClientDetails = ({ route }) => {
                     </TouchableOpacity>
                   </View>
                   <View style={styles.blockActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteBlock(block.id, true);
+                      }}
+                    >
+                      <Icon name="trash-outline" size={18} color="#FF3B30" />
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.duplicateButton}
                       onPress={() => handleDuplicateBlock(block)}
@@ -879,54 +1053,79 @@ const ClientDetails = ({ route }) => {
             </View>
           )}
 
-          <Text style={[styles.sectionTitle, styles.previousTitle]}>Previous Blocks</Text>
-          {previousBlocks.map((block) => (
-            <TouchableOpacity
-              key={block.id}
-              style={styles.blockCard}
-              onPress={() => navigation.navigate("WorkoutProgram", {
-                block,
-                onReopenBlock: handleReopenBlock,
-                isPreviousBlock: true
-              })}
-            >
-              <View style={styles.blockHeader}>
-                <View style={styles.blockTitleContainer}>
-                  <Text style={styles.blockName}>{block.name}</Text>
-                  <TouchableOpacity
-                    style={styles.blockRenameButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleRenameBlock(block);
-                    }}
-                  >
-                    <Icon name="pencil-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.blockActions}>
-                  <TouchableOpacity
-                    style={styles.duplicateButton}
-                    onPress={() => handleDuplicateBlock(block)}
-                  >
-                    <Icon name="copy-outline" size={18} color="#666" />
-                  </TouchableOpacity>
-                  <View style={styles.statusBadge}>
-                    <Icon name="checkmark-circle" size={18} color="#666" />
+          <Text style={[styles.sectionTitle, styles.previousTitle]}>
+            Previous Blocks
+          </Text>
+          {previousBlocks.length > 0 ? (
+            filterBlocks(previousBlocks).map((block) => (
+              <TouchableOpacity
+                key={block.id}
+                style={styles.blockCard}
+                onPress={() =>
+                  navigation.navigate("WorkoutProgram", {
+                    block,
+                    onReopenBlock: handleReopenBlock,
+                    isPreviousBlock: true,
+                  })
+                }
+              >
+                <View style={styles.blockHeader}>
+                  <View style={styles.blockTitleContainer}>
+                    <Text style={styles.blockName}>{block.name}</Text>
+                    <TouchableOpacity
+                      style={styles.blockRenameButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleRenameBlock(block);
+                      }}
+                    >
+                      <Icon name="pencil-outline" size={16} color="#666" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.blockActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteBlock(block.id, false);
+                      }}
+                    >
+                      <Icon name="trash-outline" size={18} color="#666" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.duplicateButton}
+                      onPress={() => handleDuplicateBlock(block)}
+                    >
+                      <Icon name="copy-outline" size={18} color="#666" />
+                    </TouchableOpacity>
+                    <View style={styles.statusBadge}>
+                      <Icon name="checkmark-circle" size={18} color="#666" />
+                    </View>
                   </View>
                 </View>
-              </View>
-              <Text style={styles.dateText}>
-                {block.startDate} - {block.endDate}
+                <Text style={styles.dateText}>
+                  {block.startDate} - {block.endDate}
+                </Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.noBlockContainer}>
+              <Text style={styles.noBlockText}>
+                No previous training blocks
               </Text>
-            </TouchableOpacity>
-          ))}
+            </View>
+          )}
         </View>
       </ScrollView>
 
-      <Modal visible={isBlockRenameModalVisible} transparent animationType="fade">
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+      <Modal
+        visible={isBlockRenameModalVisible}
+        transparent
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={() => setIsBlockRenameModalVisible(false)}
         >
           <View style={styles.modalContent}>
@@ -965,6 +1164,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 40,
     paddingTop: 140,
+    paddingBottom: 60,
   },
   backButton: {
     position: "absolute",
@@ -989,7 +1189,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   initial: {
-    color: "#fff", 
+    color: "#fff",
     fontSize: 48,
     fontWeight: "bold",
   },
@@ -1022,8 +1222,8 @@ const styles = StyleSheet.create({
   },
   blockTitleContainer: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   blockName: {
     fontSize: 18,
@@ -1032,8 +1232,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBadge: {
-    padding: 4,  // Match other button padding
-    opacity: 0.6,  // Match other button opacity
+    padding: 4, // Match other button padding
+    opacity: 0.6, // Match other button opacity
   },
   dateText: {
     color: "#666",
@@ -1053,27 +1253,27 @@ const styles = StyleSheet.create({
   },
   noBlockContainer: {
     padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: "#f8f8f8",
     marginVertical: 10,
   },
   noBlockText: {
     fontSize: 16,
-    color: '#666',
-    fontStyle: 'italic',
+    color: "#666",
+    fontStyle: "italic",
   },
   blockActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginLeft: 8,
   },
   duplicateButton: {
     padding: 4,
     borderRadius: 6,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     opacity: 0.6,
   },
   blockRenameButton: {
@@ -1082,34 +1282,34 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 24,
-    width: '80%',
+    width: "80%",
     maxWidth: 400,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 16,
-    color: '#000',
+    color: "#000",
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
     marginBottom: 24,
   },
   modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: 12,
   },
   modalButton: {
@@ -1117,24 +1317,120 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     minWidth: 80,
-    alignItems: 'center',
+    alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
   },
   saveButton: {
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   cancelButtonText: {
-    color: '#666',
+    color: "#666",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   saveButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    marginBottom: 24,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f8f8",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: "#000",
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#f8f8f8",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  filterButtonActive: {
+    backgroundColor: "#fff",
+    borderColor: "#000",
+  },
+  datePickerContainer: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 12,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  datePickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#000",
+  },
+  clearButton: {
+    padding: 4,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "500",
+  },
+  dateRangeContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  dateInputWrapper: {
+    flex: 1,
+  },
+  dateInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 15,
+    color: "#000",
+    backgroundColor: "#fff",
+  },
+  dateRangeLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 4,
+  },
+  actionButton: {
+    padding: 4,
+    marginRight: 8,
   },
 });
 
-export default ClientDetails; 
+export default ClientDetails;

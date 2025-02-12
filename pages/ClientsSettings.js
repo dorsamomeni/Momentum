@@ -2,9 +2,11 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { useSettings } from '../contexts/SettingsContext';
 
 const ClientsSettings = () => {
   const navigation = useNavigation();
+  const { weightUnit, toggleWeightUnit } = useSettings();
 
   const handleChangePhoto = () => {
     // Add photo change logic here
@@ -26,6 +28,18 @@ const ClientsSettings = () => {
       <Text style={styles.title}>Settings</Text>
 
       <View style={styles.settingsContainer}>
+        {/* Weight Unit Option */}
+        <TouchableOpacity
+          style={styles.settingOption}
+          onPress={toggleWeightUnit}
+        >
+          <View style={styles.optionLeft}>
+            <Icon name="barbell-outline" size={24} color="#000" />
+            <Text style={styles.optionText}>Weight Unit ({weightUnit.toUpperCase()})</Text>
+          </View>
+          <Icon name="chevron-forward" size={24} color="#666" />
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.settingOption}
           onPress={handleChangePhoto}
@@ -103,6 +117,16 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: "#FF3B30",
+  },
+  optionSubtext: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 2,
+  },
+  toggleText: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "500",
   },
 });
 

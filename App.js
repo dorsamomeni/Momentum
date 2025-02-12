@@ -15,6 +15,8 @@ import UserProfile from "./pages/UserProfile";
 import ClientDetails from "./pages/ClientDetails";
 import CreateBlock from "./pages/CreateBlock";
 import WorkoutProgram from "./pages/WorkoutProgram";
+import Settings from "./pages/Settings";
+import { SettingsProvider } from "./contexts/SettingsContext";
 
 const slides = [
   {
@@ -83,77 +85,84 @@ export default function App() {
   };
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName={showHomePage ? "OpeningScreen" : "Onboarding"}
-      >
-        {!showHomePage ? (
-          <Stack.Screen
-            name="Onboarding"
-            component={OnboardingScreen}
-            options={{ headerShown: false }}
-          />
-        ) : (
-          <>
+    <SettingsProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName={showHomePage ? "OpeningScreen" : "Onboarding"}
+        >
+          {!showHomePage ? (
             <Stack.Screen
-              name="OpeningScreen"
-              component={OpeningScreen}
+              name="Onboarding"
+              component={OnboardingScreen}
               options={{ headerShown: false }}
             />
-            <Stack.Screen
-              name="SignIn"
-              component={SignIn}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="SignUp"
-              component={SignUp}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Welcome"
-              component={Welcome}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Clients"
-              component={Clients}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="ClientRequests"
-              component={ClientRequests}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="AddClient"
-              component={AddClient}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="UserProfile"
-              component={UserProfile}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="ClientDetails"
-              component={ClientDetails}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="CreateBlock"
-              component={CreateBlock}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="WorkoutProgram"
-              component={WorkoutProgram}
-              options={{ headerShown: false }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+          ) : (
+            <>
+              <Stack.Screen
+                name="OpeningScreen"
+                component={OpeningScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="SignIn"
+                component={SignIn}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="SignUp"
+                component={SignUp}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Welcome"
+                component={Welcome}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Clients"
+                component={Clients}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="ClientRequests"
+                component={ClientRequests}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="AddClient"
+                component={AddClient}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="UserProfile"
+                component={UserProfile}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="ClientDetails"
+                component={ClientDetails}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="CreateBlock"
+                component={CreateBlock}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="WorkoutProgram"
+                component={WorkoutProgram}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="Settings"
+                component={Settings}
+                options={{ headerShown: false }}
+              />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SettingsProvider>
   );
 }
 

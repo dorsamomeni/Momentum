@@ -13,12 +13,14 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { useSettings } from "../contexts/SettingsContext";
 
 const { width } = Dimensions.get("window");
 
 const WorkoutProgram = ({ route }) => {
   const navigation = useNavigation();
   const { block, onCloseBlock, isPreviousBlock, onReopenBlock } = route.params;
+  const { weightUnit } = useSettings();
   const days = Array(block.sessionsPerWeek).fill(null);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [totalWeeks, setTotalWeeks] = useState(block.weeks?.length || 1);
@@ -26,7 +28,19 @@ const WorkoutProgram = ({ route }) => {
     block.weeks || [
       {
         exercises: Array(block.sessionsPerWeek).fill({
-          exercises: [],
+          exercises: [
+            {
+              name: "",
+              sets: [
+                {
+                  scheme: "",
+                  weight: "",
+                  setCount: "1",
+                },
+              ],
+              notes: "",
+            },
+          ],
         }),
       },
     ]
@@ -49,6 +63,7 @@ const WorkoutProgram = ({ route }) => {
   const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] =
     useState(false);
   const [tempBlockName, setTempBlockName] = useState(block.name);
+  const weeksSliderRef = useRef(null);
 
   const handleScroll = (event) => {
     if (isProgrammaticScroll) return; // Skip if programmatic scroll
@@ -60,51 +75,82 @@ const WorkoutProgram = ({ route }) => {
   const handleAddWeek = () => {
     const newWeek = {
       exercises: Array(block.sessionsPerWeek).fill({
-        exercises: [],
+        exercises: [
+          {
+            name: "",
+            sets: [
+              {
+                scheme: "",
+                weight: "",
+                setCount: "1",
+              },
+            ],
+            notes: "",
+          },
+        ],
       }),
     };
 
     const newTotalWeeks = totalWeeks + 1;
-
-    setBlockWeeks([...blockWeeks, newWeek]);
-    setTotalWeeks(newTotalWeeks);
-    setCurrentWeek(newTotalWeeks);
-
-    setIsProgrammaticScroll(true); // Set flag before scrolling
-    scrollViewRef.current?.scrollTo({
-      x: (newTotalWeeks - 1) * width,
-      animated: true,
-    });
-
-    // Reset flag after animation completes
-    setTimeout(() => {
-      setIsProgrammaticScroll(false);
-    }, 500); // Adjust timing if needed
-  };
-
-  const handleCopyWeek = () => {
-    // Create a deep copy of the current week
-    const weekToCopy = JSON.parse(JSON.stringify(blockWeeks[currentWeek - 1]));
-    const newTotalWeeks = totalWeeks + 1;
+    const newWeekName = `Week ${newTotalWeeks}`;
 
     setIsProgrammaticScroll(true);
 
-    // Add the copied week to the end of blockWeeks and update states
-    setBlockWeeks([...blockWeeks, weekToCopy]);
+    // Update all states at once before animations
+    setBlockWeeks([...blockWeeks, newWeek]);
     setTotalWeeks(newTotalWeeks);
+    setWeekNames([...weekNames, newWeekName]);
 
-    // Use requestAnimationFrame to ensure state updates have processed
+    // Wait for state updates to process
     requestAnimationFrame(() => {
+      // Set current week and trigger both scrolls simultaneously
       setCurrentWeek(newTotalWeeks);
+
+      // Perform both scroll animations together
       scrollViewRef.current?.scrollTo({
         x: (newTotalWeeks - 1) * width,
         animated: true,
       });
+      weeksSliderRef.current?.scrollToEnd({
+        animated: true,
+        duration: 300, // Match the default React Native scroll animation duration
+      });
 
-      // Reset scroll flag after animation
+      // Reset programmatic scroll flag after animations complete
       setTimeout(() => {
         setIsProgrammaticScroll(false);
-      }, 500);
+      }, 300);
+    });
+  };
+
+  const handleCopyWeek = () => {
+    const weekToCopy = JSON.parse(JSON.stringify(blockWeeks[currentWeek - 1]));
+    const newTotalWeeks = totalWeeks + 1;
+    const newWeekName = `Week ${newTotalWeeks}`;
+
+    setIsProgrammaticScroll(true);
+
+    // Update all states at once before animations
+    setBlockWeeks([...blockWeeks, weekToCopy]);
+    setTotalWeeks(newTotalWeeks);
+    setWeekNames([...weekNames, newWeekName]);
+
+    requestAnimationFrame(() => {
+      setCurrentWeek(newTotalWeeks);
+
+      // Perform both scroll animations together
+      scrollViewRef.current?.scrollTo({
+        x: (newTotalWeeks - 1) * width,
+        animated: true,
+      });
+      weeksSliderRef.current?.scrollToEnd({
+        animated: true,
+        duration: 300,
+      });
+
+      setTimeout(() => {
+        setIsProgrammaticScroll(false);
+      }, 300);
     });
   };
 
@@ -152,16 +198,38 @@ const WorkoutProgram = ({ route }) => {
   const handleAddExercise = (weekIndex, dayIndex) => {
     const newExercise = {
       name: "",
-      scheme: "",
-      weight: "",
+      sets: [
+        {
+          scheme: "",
+          weight: "",
+          setCount: "1", // Default to 1 set
+        },
+      ],
       notes: "",
     };
 
-    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks)); // Deep copy
+    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
     if (!updatedWeeks[weekIndex].exercises[dayIndex].exercises) {
       updatedWeeks[weekIndex].exercises[dayIndex].exercises = [];
     }
     updatedWeeks[weekIndex].exercises[dayIndex].exercises.push(newExercise);
+    setBlockWeeks(updatedWeeks);
+  };
+
+  const handleAddSet = (weekIndex, dayIndex, exerciseIndex) => {
+    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
+    const exercise =
+      updatedWeeks[weekIndex].exercises[dayIndex].exercises[exerciseIndex];
+
+    if (!exercise.sets) {
+      exercise.sets = [];
+    }
+
+    exercise.sets.push({
+      scheme: "",
+      weight: "",
+    });
+
     setBlockWeeks(updatedWeeks);
   };
 
@@ -261,25 +329,43 @@ const WorkoutProgram = ({ route }) => {
               <Text style={styles.dragHandleText}>☰</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.exerciseDetails}>
-            <View style={styles.setScheme}>
-              <TextInput
-                style={styles.schemeInput}
-                defaultValue={exercise.scheme}
-                placeholder="Sets x Reps @ RPE"
-              />
+
+          {(exercise.sets || []).map((set, setIndex) => (
+            <View key={setIndex} style={styles.setRow}>
+              <View style={styles.setScheme}>
+                <TextInput
+                  style={styles.schemeInput}
+                  defaultValue={set.scheme}
+                  placeholder="Sets x Reps @ RPE"
+                />
+              </View>
+
+              <View style={styles.weightInput}>
+                <TextInput
+                  style={styles.weightTextInput}
+                  defaultValue={set.weight}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+                <TouchableOpacity
+                  style={styles.weightUnitButton}
+                  onPress={() =>
+                    setWeightUnit(weightUnit === "kg" ? "lbs" : "kg")
+                  }
+                >
+                  <Text style={styles.weightUnit}>{weightUnit}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.weightInput}>
-              <Text style={styles.weightLabel}>Weight:</Text>
-              <TextInput
-                style={styles.weightTextInput}
-                defaultValue={exercise.weight}
-                keyboardType="numeric"
-                placeholder="0"
-              />
-              <Text style={styles.weightUnit}>kg</Text>
-            </View>
-          </View>
+          ))}
+
+          <TouchableOpacity
+            style={styles.addSetButton}
+            onPress={() => handleAddSet(weekIndex, dayIndex, index)}
+          >
+            <Text style={styles.addSetButtonText}>+ Add Set</Text>
+          </TouchableOpacity>
+
           <View style={styles.noteContainer}>
             <Text style={styles.noteLabel}>Notes:</Text>
             <TextInput
@@ -343,19 +429,10 @@ const WorkoutProgram = ({ route }) => {
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.actionButton, styles.primaryButton]}
-            onPress={handleAddWeek}
-          >
-            <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
-              New
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.primaryButton]}
             onPress={handleCopyWeek}
           >
             <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
-              Copy
+              Duplicate Week
             </Text>
           </TouchableOpacity>
 
@@ -381,7 +458,7 @@ const WorkoutProgram = ({ route }) => {
               onPress={handleReopenBlock}
             >
               <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
-                Reopen
+                Reopen Block
               </Text>
             </TouchableOpacity>
           ) : (
@@ -413,7 +490,13 @@ const WorkoutProgram = ({ route }) => {
             {blockWeeks
               ? // For existing blocks with data
                 blockWeeks[weekIndex].exercises.map((day, dayIndex) => (
-                  <View key={dayIndex} style={styles.daySection}>
+                  <View
+                    key={dayIndex}
+                    style={[
+                      styles.daySection,
+                      dayIndex === 0 && styles.firstDaySection,
+                    ]}
+                  >
                     <View style={styles.dayHeader}>
                       <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
                       <TouchableOpacity
@@ -434,13 +517,30 @@ const WorkoutProgram = ({ route }) => {
                         />
                       ))}
                     </View>
+                    <TouchableOpacity
+                      style={styles.bottomAddExerciseButton}
+                      onPress={() => handleAddExercise(weekIndex, dayIndex)}
+                    >
+                      <View style={styles.bottomAddExerciseContent}>
+                        <Icon name="add-outline" size={20} color="#666" />
+                        <Text style={styles.bottomAddExerciseText}>
+                          Add Exercise
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
                   </View>
                 ))
               : // For new blocks without data
                 Array(block.sessionsPerWeek)
                   .fill(null)
                   .map((_, dayIndex) => (
-                    <View key={dayIndex} style={styles.daySection}>
+                    <View
+                      key={dayIndex}
+                      style={[
+                        styles.daySection,
+                        dayIndex === 0 && styles.firstDaySection,
+                      ]}
+                    >
                       <View style={styles.dayHeader}>
                         <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
                         <TouchableOpacity
@@ -456,8 +556,13 @@ const WorkoutProgram = ({ route }) => {
                         <ExerciseItem
                           exercise={{
                             name: "",
-                            scheme: "",
-                            weight: "0",
+                            sets: [
+                              {
+                                scheme: "",
+                                weight: "0",
+                                setCount: "1",
+                              },
+                            ],
                             notes: "",
                           }}
                           index={0}
@@ -465,6 +570,19 @@ const WorkoutProgram = ({ route }) => {
                           dayIndex={dayIndex}
                         />
                       </View>
+                      <TouchableOpacity
+                        style={styles.bottomAddExerciseButton}
+                        onPress={() =>
+                          handleAddExercise(currentWeek - 1, dayIndex)
+                        }
+                      >
+                        <View style={styles.bottomAddExerciseContent}>
+                          <Icon name="add-outline" size={20} color="#666" />
+                          <Text style={styles.bottomAddExerciseText}>
+                            Add Exercise
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
                     </View>
                   ))}
           </ScrollView>
@@ -472,50 +590,63 @@ const WorkoutProgram = ({ route }) => {
       </ScrollView>
 
       <View style={styles.weekNavigation}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.weeksContainer}
-        >
-          {Array(totalWeeks)
-            .fill(null)
-            .map((_, index) => (
-              <View key={index} style={styles.weekButtonWrapper}>
-                <TouchableOpacity
-                  style={[
-                    styles.weekButton,
-                    currentWeek === index + 1 && styles.weekButtonActive,
-                  ]}
-                  onPress={() => {
-                    setIsProgrammaticScroll(true);
-                    setCurrentWeek(index + 1);
-                    scrollViewRef.current?.scrollTo({
-                      x: index * width,
-                      animated: true,
-                    });
-                    setTimeout(() => {
-                      setIsProgrammaticScroll(false);
-                    }, 500);
-                  }}
-                >
-                  <Text
+        <View style={styles.weekNavigationContent}>
+          <ScrollView
+            ref={weeksSliderRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.weeksContainer}
+          >
+            {Array(totalWeeks)
+              .fill(null)
+              .map((_, index) => (
+                <View key={index} style={styles.weekButtonWrapper}>
+                  <TouchableOpacity
                     style={[
-                      styles.weekButtonText,
-                      currentWeek === index + 1 && styles.weekButtonTextActive,
+                      styles.weekButton,
+                      currentWeek === index + 1 && styles.weekButtonActive,
                     ]}
+                    onPress={() => {
+                      setIsProgrammaticScroll(true);
+                      setCurrentWeek(index + 1);
+
+                      scrollViewRef.current?.scrollTo({
+                        x: index * width,
+                        animated: true,
+                      });
+
+                      setTimeout(() => {
+                        setIsProgrammaticScroll(false);
+                      }, 300); // Match the animation duration
+                    }}
                   >
-                    {weekNames[index]}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.renameButton}
-                  onPress={() => handleRenameWeek(index)}
-                >
-                  <Icon name="pencil-outline" size={14} color="#666" />
-                </TouchableOpacity>
-              </View>
-            ))}
-        </ScrollView>
+                    <Text
+                      style={[
+                        styles.weekButtonText,
+                        currentWeek === index + 1 &&
+                          styles.weekButtonTextActive,
+                      ]}
+                    >
+                      {weekNames[index]}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.renameButton}
+                    onPress={() => handleRenameWeek(index)}
+                  >
+                    <Icon name="pencil-outline" size={14} color="#666" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.addWeekButton}
+            onPress={handleAddWeek}
+          >
+            <Icon name="add" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal visible={isRenameModalVisible} transparent animationType="fade">
@@ -596,6 +727,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     paddingTop: 120,
+    paddingBottom: 60,
   },
   headerContainer: {
     paddingHorizontal: 24,
@@ -631,21 +763,34 @@ const styles = StyleSheet.create({
     flex: 1,
     width: width,
     paddingHorizontal: 24,
+    paddingTop: 8,
   },
   daySection: {
-    marginBottom: 32,
+    marginBottom: 24,
+    paddingTop: 24,
+    borderTopWidth: 2,
+    borderTopColor: "#eaeaea",
+    backgroundColor: "#fff",
+    marginHorizontal: -24,
+    paddingHorizontal: 24,
+  },
+  firstDaySection: {
+    paddingTop: 0,
+    borderTopWidth: 0,
+    marginTop: 0,
   },
   dayHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
     paddingHorizontal: 4,
   },
   dayTitle: {
-    fontSize: 20,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#000",
+    letterSpacing: 0.3,
   },
   addExerciseButton: {
     padding: 4,
@@ -659,9 +804,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   exercise: {
+    marginBottom: 16,
     backgroundColor: "#fff",
     borderRadius: 12,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#f0f0f0",
     shadowColor: "#000",
@@ -674,13 +819,12 @@ const styles = StyleSheet.create({
   },
   exerciseContent: {
     flex: 1,
-    padding: 16,
+    padding: 12,
   },
   exerciseNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   exerciseNameInput: {
     flex: 1,
@@ -707,6 +851,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  setRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
   setScheme: {
     flex: 1,
     borderWidth: 1,
@@ -720,7 +870,6 @@ const styles = StyleSheet.create({
     color: "#000",
     fontWeight: "500",
     padding: 0,
-    flex: 1,
   },
   weightInput: {
     borderWidth: 1,
@@ -730,12 +879,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
-    minWidth: 110,
-  },
-  weightLabel: {
-    fontSize: 15,
-    color: "#666",
-    marginRight: 6,
+    minWidth: 90,
   },
   weightTextInput: {
     fontSize: 15,
@@ -745,27 +889,31 @@ const styles = StyleSheet.create({
     minWidth: 40,
     textAlign: "right",
   },
+  weightUnitButton: {
+    paddingLeft: 4,
+    paddingVertical: 2,
+  },
   weightUnit: {
     fontSize: 15,
-    color: "#000",
-    marginLeft: 4,
+    color: "#666",
+    fontWeight: "500",
   },
   noteContainer: {
-    marginTop: 14,
-    paddingTop: 14,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
   },
   noteLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#666",
-    marginBottom: 4,
+    marginBottom: 2,
     fontWeight: "500",
   },
   noteInput: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#000",
-    lineHeight: 20,
+    lineHeight: 18,
     padding: 0,
   },
   weekNavigation: {
@@ -774,10 +922,16 @@ const styles = StyleSheet.create({
     borderTopColor: "#f0f0f0",
     backgroundColor: "#fff",
   },
+  weekNavigationContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 16,
+  },
   weeksContainer: {
     paddingHorizontal: 16,
     gap: 8,
     flexDirection: "row",
+    flexGrow: 1,
   },
   weekButtonWrapper: {
     flexDirection: "row",
@@ -806,31 +960,41 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     flexDirection: "row",
-    gap: 6,
-    marginTop: 16,
-    marginBottom: 24,
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
   actionButton: {
     flex: 1,
     height: 36,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 3,
   },
   actionButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
+    letterSpacing: 0.3,
   },
   primaryButton: {
-    borderColor: "#000",
+    borderColor: "#e0e0e0",
     backgroundColor: "#fff",
   },
   primaryButtonText: {
     color: "#000",
   },
   deleteButton: {
-    borderColor: "#FF3B30",
+    borderColor: "#ffd5d5",
     backgroundColor: "#fff",
   },
   deleteButtonText: {
@@ -839,12 +1003,14 @@ const styles = StyleSheet.create({
   closeButton: {
     borderColor: "#000",
     backgroundColor: "#000",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
   },
   closeButtonText: {
     color: "#fff",
   },
   disabledButtonText: {
-    opacity: 0.5,
+    opacity: 0.3,
   },
   dragHandleActive: {
     backgroundColor: "#f0f0f0",
@@ -912,6 +1078,60 @@ const styles = StyleSheet.create({
   blockRenameButton: {
     padding: 4,
     opacity: 0.6,
+  },
+  addWeekButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f8f8f8",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  addSetButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#f8f8f8",
+    alignSelf: "flex-start",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  addSetButtonText: {
+    fontSize: 13,
+    color: "#666",
+    fontWeight: "600",
+  },
+  bottomAddExerciseButton: {
+    backgroundColor: "#f8f8f8",
+    padding: 14,
+    borderRadius: 12,
+    marginTop: 20,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  bottomAddExerciseContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  bottomAddExerciseText: {
+    color: "#666",
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 0.3,
   },
 });
 

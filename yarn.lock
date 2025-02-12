@@ -2486,6 +2486,13 @@
   resolved "https://registry.npmjs.org/@protobufjs/utf8/-/utf8-1.1.0.tgz"
   integrity sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==
 
+"@react-native-community/datetimepicker@^8.3.0":
+  version "8.3.0"
+  resolved "https://registry.npmjs.org/@react-native-community/datetimepicker/-/datetimepicker-8.3.0.tgz"
+  integrity sha512-K/KgaJbLtjMpx4PaG4efrVIcSe6+DbLufeX1lwPB5YY8i3sq9dOh6WcAcMTLbaRTUpurebQTkl7puHPFm9GalA==
+  dependencies:
+    invariant "^2.2.4"
+
 "@react-native-firebase/app@^21.6.2", "@react-native-firebase/app@21.6.2":
   version "21.6.2"
   resolved "https://registry.npmjs.org/@react-native-firebase/app/-/app-21.6.2.tgz"
@@ -4111,7 +4118,7 @@ expo-status-bar@~2.0.0:
   resolved "https://registry.npmjs.org/expo-status-bar/-/expo-status-bar-2.0.0.tgz"
   integrity sha512-vxxdpvpNDMTEc5uTiIrbTvySKKUsOACmfl8OZuUdjNle05oGqwtq3v5YObwym/njSByjoyuZX8UpXBZnxvarwQ==
 
-expo@*, expo@>=47.0.0, expo@~52.0.23:
+expo@*, expo@>=47.0.0, expo@>=50.0.0, expo@~52.0.23:
   version "52.0.23"
   resolved "https://registry.npmjs.org/expo/-/expo-52.0.23.tgz"
   integrity sha512-DR36Vkpz/ZLPci4fxDBG/pLk26nGK63vcZ+X4RZJfNBzi14DXZ939loP8YzWGV78Qp23qdPINczpo2727tqLxg==
@@ -7420,13 +7427,4 @@ yargs@^17.6.2, yargs@^17.7.2:
   dependencies:
     cliui "^8.0.1"
     escalade "^3.1.1"
-    get-caller-file "^2.0.5"
-    require-directory "^2.1.1"
-    string-width "^4.2.3"
-    y18n "^5.0.5"
-    yargs-parser "^21.1.1"
-
-yocto-queue@^0.1.0:
-  version "0.1.0"
-  resolved "https://registry.npmjs.org/yocto-queue/-/yocto-queue-0.1.0.tgz"
-  integrity sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==
+    get-caller-fil
