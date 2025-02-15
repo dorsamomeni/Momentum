@@ -713,11 +713,6 @@ const ClientDetails = ({ route }) => {
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [tempBlockName, setTempBlockName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateFilter, setDateFilter] = useState({
-    startDate: "",
-    endDate: "",
-  });
 
   const handleNewBlock = (blockName, sessionsPerWeek) => {
     // Move current block to previous blocks if it exists
@@ -832,39 +827,10 @@ const ClientDetails = ({ route }) => {
     setIsBlockRenameModalVisible(false);
   };
 
-  const parseDate = (dateString) => {
-    if (!dateString) return null;
-    const [month, day, year] = dateString.split("/");
-    return new Date(year, month - 1, day);
-  };
-
-  const isDateInRange = (blockStartDate, blockEndDate) => {
-    if (!dateFilter.startDate && !dateFilter.endDate) return true;
-
-    const blockStart = new Date(blockStartDate);
-    const blockEnd = new Date(blockEndDate);
-    const filterStart = dateFilter.startDate
-      ? parseDate(dateFilter.startDate)
-      : null;
-    const filterEnd = dateFilter.endDate ? parseDate(dateFilter.endDate) : null;
-
-    if (filterStart && filterEnd) {
-      return blockStart >= filterStart && blockEnd <= filterEnd;
-    } else if (filterStart) {
-      return blockStart >= filterStart;
-    } else if (filterEnd) {
-      return blockEnd <= filterEnd;
-    }
-    return true;
-  };
-
   const filterBlocks = (blocks) => {
-    const query = searchQuery.toLowerCase();
-    return blocks.filter((block) => {
-      const matchesSearch = block.name.toLowerCase().includes(query);
-      const matchesDate = isDateInRange(block.startDate, block.endDate);
-      return matchesSearch && matchesDate;
-    });
+    return blocks.filter((block) => 
+      block.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   };
 
   const handleDeleteBlock = (blockId, isActive) => {
@@ -921,77 +887,7 @@ const ClientDetails = ({ route }) => {
               placeholderTextColor="#666"
             />
           </View>
-
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              (dateFilter.startDate || dateFilter.endDate) &&
-                styles.filterButtonActive,
-            ]}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Icon
-              name="calendar-outline"
-              size={20}
-              color={
-                dateFilter.startDate || dateFilter.endDate ? "#000" : "#666"
-              }
-            />
-          </TouchableOpacity>
         </View>
-
-        {showDatePicker && (
-          <View style={styles.datePickerContainer}>
-            <View style={styles.datePickerHeader}>
-              <Text style={styles.datePickerTitle}>Filter by Date</Text>
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={() => {
-                  setDateFilter({
-                    startDate: "",
-                    endDate: "",
-                  });
-                }}
-              >
-                <Text style={styles.clearButtonText}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.dateRangeContainer}>
-              <View style={styles.dateInputWrapper}>
-                <Text style={styles.dateRangeLabel}>Start Date</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="MM/DD/YYYY"
-                  value={dateFilter.startDate}
-                  onChangeText={(text) => {
-                    setDateFilter((prev) => ({
-                      ...prev,
-                      startDate: text,
-                    }));
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={styles.dateInputWrapper}>
-                <Text style={styles.dateRangeLabel}>End Date</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="MM/DD/YYYY"
-                  value={dateFilter.endDate}
-                  onChangeText={(text) => {
-                    setDateFilter((prev) => ({
-                      ...prev,
-                      endDate: text,
-                    }));
-                  }}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
-          </View>
-        )}
 
         <View style={styles.blocksSection}>
           <Text style={styles.sectionTitle}>Active Blocks</Text>
@@ -1360,72 +1256,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: "#000",
-  },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#f8f8f8",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-  },
-  filterButtonActive: {
-    backgroundColor: "#fff",
-    borderColor: "#000",
-  },
-  datePickerContainer: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 12,
-    marginBottom: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-  },
-  datePickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  datePickerTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#000",
-  },
-  clearButton: {
-    padding: 4,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
-  },
-  dateRangeContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  dateInputWrapper: {
-    flex: 1,
-  },
-  dateInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 15,
-    color: "#000",
-    backgroundColor: "#fff",
-  },
-  dateRangeLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 4,
   },
   actionButton: {
     padding: 4,
