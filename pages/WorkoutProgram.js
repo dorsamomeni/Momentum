@@ -60,9 +60,6 @@ const WorkoutProgram = ({ route }) => {
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(null);
   const [tempWeekName, setTempWeekName] = useState("");
-  const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] =
-    useState(false);
-  const [tempBlockName, setTempBlockName] = useState(block.name);
   const weeksSliderRef = useRef(null);
 
   const handleScroll = (event) => {
@@ -395,31 +392,20 @@ const WorkoutProgram = ({ route }) => {
     setIsRenameModalVisible(false);
   };
 
-  const saveBlockName = () => {
-    if (tempBlockName.trim()) {
-      block.name = tempBlockName.trim();
-    }
-    setIsBlockRenameModalVisible(false);
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>{block.name}</Text>
+        <View style={styles.header}>
           <TouchableOpacity
-            style={styles.blockRenameButton}
-            onPress={() => setIsBlockRenameModalVisible(true)}
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
           >
-            <Icon name="pencil-outline" size={16} color="#666" />
+            <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
+
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>{block.name}</Text>
+          </View>
         </View>
         <View style={styles.weekHeader}>
           <Text style={styles.subtitle}>
@@ -681,43 +667,6 @@ const WorkoutProgram = ({ route }) => {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      <Modal
-        visible={isBlockRenameModalVisible}
-        transparent
-        animationType="fade"
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsBlockRenameModalVisible(false)}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Rename Block</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={tempBlockName}
-              onChangeText={setTempBlockName}
-              placeholder="Enter block name"
-              autoFocus
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setIsBlockRenameModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={saveBlockName}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 };
@@ -733,23 +682,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 20,
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
   backButton: {
     marginTop: -60,
-    marginBottom: 20,
+    marginBottom: 40,
+    position: "absolute",
+    left: 0,
+    top: -20,
   },
   backButtonText: {
     fontSize: 28,
     color: "#000",
   },
   titleContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
-    color: "#000",
   },
   weekHeader: {
     marginBottom: 32,
@@ -1074,10 +1030,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-  },
-  blockRenameButton: {
-    padding: 4,
-    opacity: 0.6,
   },
   addWeekButton: {
     width: 36,
