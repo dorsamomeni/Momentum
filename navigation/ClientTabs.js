@@ -12,6 +12,7 @@ import Settings from '../pages/Settings';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Create a stack that includes all client-related screens
 const ClientStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -30,12 +31,12 @@ const ClientTabs = () => {
         headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          if (route.name === 'ClientsTab') {
-            iconName = focused ? 'people' : 'people-outline';
-          } else if (route.name === 'AnalyticsTab') {
-            iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-          } else if (route.name === 'SettingsTab') {
-            iconName = focused ? 'settings' : 'settings-outline';
+          if (route.name === "Clients") {
+            iconName = focused ? "people" : "people-outline";
+          } else if (route.name === "Stats") {
+            iconName = focused ? "stats-chart" : "stats-chart-outline";
+          } else if (route.name === "Settings") {
+            iconName = focused ? "settings" : "settings-outline";
           }
           return <Icon name={iconName} size={size} color={color} />;
         },
@@ -48,38 +49,20 @@ const ClientTabs = () => {
           backgroundColor: '#fff',
           borderTopWidth: 1,
           borderTopColor: '#f0f0f0',
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          elevation: 0,
         },
         tabBarHideOnKeyboard: true,
-        tabBarVisible: true,
+        tabBarShowLabel: true,
       })}
     >
       <Tab.Screen 
-        name="ClientsTab" 
+        name="Clients" 
         component={ClientStack}
         options={{
-          tabBarLabel: 'Clients',
-          unmountOnBlur: false,
+          tabBarVisible: true,
         }}
       />
-      <Tab.Screen 
-        name="AnalyticsTab" 
-        component={Analytics} 
-        options={{
-          tabBarLabel: 'Analytics',
-        }}
-      />
-      <Tab.Screen 
-        name="SettingsTab" 
-        component={Settings} 
-        options={{
-          tabBarLabel: 'Settings',
-        }}
-      />
+      <Tab.Screen name="Stats" component={Analytics} />
+      <Tab.Screen name="Settings" component={Settings} />
     </Tab.Navigator>
   );
 };

@@ -19,7 +19,7 @@ const { width } = Dimensions.get("window");
 
 const WorkoutProgram = ({ route }) => {
   const navigation = useNavigation();
-  const { block, onCloseBlock, isPreviousBlock, onReopenBlock } = route.params;
+  const { block, onCloseBlock, isPreviousBlock, onReopenBlock, isAthlete } = route.params;
   const { weightUnit } = useSettings();
   const days = Array(block.sessionsPerWeek).fill(null);
   const [currentWeek, setCurrentWeek] = useState(1);
@@ -235,6 +235,7 @@ const WorkoutProgram = ({ route }) => {
               style={styles.exerciseNameInput}
               defaultValue={exercise.name}
               placeholder="Exercise name"
+              editable={!isAthlete}
             />
             <TouchableOpacity style={styles.dragHandle}>
               <Text style={styles.dragHandleText}>☰</Text>
@@ -399,12 +400,14 @@ const WorkoutProgram = ({ route }) => {
                   >
                     <View style={styles.dayHeader}>
                       <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
-                      <TouchableOpacity
-                        style={styles.addExerciseButton}
-                        onPress={() => handleAddExercise(weekIndex, dayIndex)}
-                      >
-                        <Text style={styles.addExerciseIcon}>+</Text>
-                      </TouchableOpacity>
+                      {!isAthlete && (
+                        <TouchableOpacity
+                          style={styles.addExerciseButton}
+                          onPress={() => handleAddExercise(weekIndex, dayIndex)}
+                        >
+                          <Text style={styles.addExerciseIcon}>+</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                     <View style={styles.exercisesContainer}>
                       {day.exercises.map((exercise, index) => (
@@ -417,17 +420,19 @@ const WorkoutProgram = ({ route }) => {
                         />
                       ))}
                     </View>
-                    <TouchableOpacity
-                      style={styles.bottomAddExerciseButton}
-                      onPress={() => handleAddExercise(weekIndex, dayIndex)}
-                    >
-                      <View style={styles.bottomAddExerciseContent}>
-                        <Icon name="add-outline" size={20} color="#666" />
-                        <Text style={styles.bottomAddExerciseText}>
-                          Add Exercise
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
+                    {!isAthlete && (
+                      <TouchableOpacity
+                        style={styles.bottomAddExerciseButton}
+                        onPress={() => handleAddExercise(weekIndex, dayIndex)}
+                      >
+                        <View style={styles.bottomAddExerciseContent}>
+                          <Icon name="add-outline" size={20} color="#666" />
+                          <Text style={styles.bottomAddExerciseText}>
+                            Add Exercise
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))
               : // For new blocks without data
@@ -443,14 +448,16 @@ const WorkoutProgram = ({ route }) => {
                     >
                       <View style={styles.dayHeader}>
                         <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
-                        <TouchableOpacity
-                          style={styles.addExerciseButton}
-                          onPress={() =>
-                            handleAddExercise(currentWeek - 1, dayIndex)
-                          }
-                        >
-                          <Text style={styles.addExerciseIcon}>+</Text>
-                        </TouchableOpacity>
+                        {!isAthlete && (
+                          <TouchableOpacity
+                            style={styles.addExerciseButton}
+                            onPress={() =>
+                              handleAddExercise(currentWeek - 1, dayIndex)
+                            }
+                          >
+                            <Text style={styles.addExerciseIcon}>+</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                       <View style={styles.exercisesContainer}>
                         <ExerciseItem
@@ -470,19 +477,21 @@ const WorkoutProgram = ({ route }) => {
                           dayIndex={dayIndex}
                         />
                       </View>
-                      <TouchableOpacity
-                        style={styles.bottomAddExerciseButton}
-                        onPress={() =>
-                          handleAddExercise(currentWeek - 1, dayIndex)
-                        }
-                      >
-                        <View style={styles.bottomAddExerciseContent}>
-                          <Icon name="add-outline" size={20} color="#666" />
-                          <Text style={styles.bottomAddExerciseText}>
-                            Add Exercise
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
+                      {!isAthlete && (
+                        <TouchableOpacity
+                          style={styles.bottomAddExerciseButton}
+                          onPress={() =>
+                            handleAddExercise(currentWeek - 1, dayIndex)
+                          }
+                        >
+                          <View style={styles.bottomAddExerciseContent}>
+                            <Icon name="add-outline" size={20} color="#666" />
+                            <Text style={styles.bottomAddExerciseText}>
+                              Add Exercise
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   ))}
           </ScrollView>
@@ -590,7 +599,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     paddingTop: 120,
-    paddingBottom: 60,
+    paddingBottom: 90,
   },
   headerContainer: {
     paddingHorizontal: 24,

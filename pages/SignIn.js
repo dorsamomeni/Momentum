@@ -7,17 +7,39 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { signin } from "../src/auth/signin";
 
 const SignIn = () => {
   const navigation = useNavigation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSignIn = () => {
-    // TODO: Add sign in logic here
-    navigation.navigate("Clients");
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await signin(email, password);
+      console.log("Signin successful:", result);
+
+      // Navigate all users to Clients screen
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Clients" }],
+      });
+    } catch (error) {
+      console.log("Signin error:", error);
+      Alert.alert("Error", error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -75,11 +97,13 @@ const SignIn = () => {
           </View>
 
           <TouchableOpacity
-            style={styles.signInButton}
+            style={[styles.signInButton, loading && styles.disabledButton]}
             onPress={handleSignIn}
-            activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.signInButtonText}>Sign In</Text>
+            <Text style={styles.signInButtonText}>
+              {loading ? "Signing in..." : "Sign In"}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -201,6 +225,9 @@ const styles = StyleSheet.create({
     color: "#000",
     fontSize: 15,
     fontWeight: "600",
+  },
+  disabledButton: {
+    backgroundColor: "#ccc",
   },
 });
 

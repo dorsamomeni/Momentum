@@ -1,9 +1,10 @@
 import "react-native-gesture-handler";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, Text, View, Image } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import AppIntroSlider from "react-native-app-intro-slider";
+import "./src/config/firebase";
 import OpeningScreen from "./pages/OpeningScreen";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
@@ -17,6 +18,8 @@ import CreateBlock from "./pages/CreateBlock";
 import WorkoutProgram from "./pages/WorkoutProgram";
 import Settings from "./pages/Settings";
 import { SettingsProvider } from "./contexts/SettingsContext";
+import AthleteHome from "./pages/AthleteHome";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const slides = [
   {
@@ -43,9 +46,32 @@ const Stack = createStackNavigator();
 
 export default function App() {
   const [showHomePage, setShowHomePage] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  console.log("App rendering, showHomePage:", showHomePage);
 
-  const handleDone = () => {
-    setShowHomePage(true);
+  useEffect(() => {
+    checkOnboarding();
+  }, []);
+
+  const checkOnboarding = async () => {
+    try {
+      // Clear the onboarding flag to always show onboarding
+      await AsyncStorage.removeItem("hasSeenOnboarding");
+      setShowHomePage(false);
+    } catch (error) {
+      console.log("Error checking onboarding status:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDone = async () => {
+    try {
+      await AsyncStorage.setItem("hasSeenOnboarding", "true");
+      setShowHomePage(true);
+    } catch (error) {
+      console.log("Error saving onboarding status:", error);
+    }
   };
 
   const OnboardingScreen = () => {
@@ -84,80 +110,46 @@ export default function App() {
     );
   };
 
+  // Show loading state
+  if (isLoading) {
+    return null;
+  }
+
+  console.log("Rendering App component");
+
   return (
     <SettingsProvider>
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName={showHomePage ? "OpeningScreen" : "Onboarding"}
+          screenOptions={{
+            headerShown: false,
+            gestureEnabled: false,
+          }}
         >
           {!showHomePage ? (
-            <Stack.Screen
-              name="Onboarding"
-              component={OnboardingScreen}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           ) : (
             <>
+              <Stack.Screen name="OpeningScreen" component={OpeningScreen} />
+              <Stack.Screen name="SignIn" component={SignIn} />
+              <Stack.Screen name="SignUp" component={SignUp} />
+              <Stack.Screen name="Welcome" component={Welcome} />
               <Stack.Screen
-                name="OpeningScreen"
-                component={OpeningScreen}
-                options={{ headerShown: false }}
+                name="AthleteHome"
+                component={AthleteHome}
+                options={{
+                  animationEnabled: false,
+                }}
               />
-              <Stack.Screen
-                name="SignIn"
-                component={SignIn}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="SignUp"
-                component={SignUp}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="Welcome"
-                component={Welcome}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="Clients"
-                component={Clients}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="ClientRequests"
-                component={ClientRequests}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="AddClient"
-                component={AddClient}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="UserProfile"
-                component={UserProfile}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="ClientDetails"
-                component={ClientDetails}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="CreateBlock"
-                component={CreateBlock}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="WorkoutProgram"
-                component={WorkoutProgram}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="Settings"
-                component={Settings}
-                options={{ headerShown: false }}
-              />
+              <Stack.Screen name="Clients" component={Clients} />
+              <Stack.Screen name="Settings" component={Settings} />
+              <Stack.Screen name="ClientRequests" component={ClientRequests} />
+              <Stack.Screen name="AddClient" component={AddClient} />
+              <Stack.Screen name="ClientDetails" component={ClientDetails} />
+              <Stack.Screen name="CreateBlock" component={CreateBlock} />
+              <Stack.Screen name="WorkoutProgram" component={WorkoutProgram} />
+              <Stack.Screen name="UserProfile" component={UserProfile} />
             </>
           )}
         </Stack.Navigator>

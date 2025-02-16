@@ -1,44 +1,80 @@
-import { createClient } from "@supabase/supabase-js";
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import firebase from "firebase/app";
-import "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "../config/firebase";
 
-const supabaseUrl = "https://vdneurspphelgopdreey.supabase.co";
-const supabaseKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkbmV1cnNwcGhlbGdvcGRyZWV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0NTc4NjQsImV4cCI6MjA1MjAzMzg2NH0.5if9hfE9k2lS6cdRCRNQgTJHpSntPAtQm4gE2m4zs-E";
-const supabase = createClient(supabaseUrl, supabaseKey);
+export const signup = async (userData) => {
+  const { email, password, firstName, lastName, username, role } = userData;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCcEJPObD_XKxoiAoCdJhv77bGHtFdrlgQ",
-  authDomain: "momentum-fb140.firebaseapp.com",
-  projectId: "momentum-fb140",
-  storageBucket: "momentum-fb140.firebasestorage.app",
-  messagingSenderId: "432908468966",
-  appId: "1:432908468966:web:d9048819ee31191ac8b127",
-  measurementId: "G-BV8LC13DR0",
-};
-
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
-export const signup = async (email, password) => {
   try {
-    const { user, error: supabaseError } = await supabase.auth.signUp({
+    // Create auth user
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
       email,
-      password,
+      password
+    );
+    const user = userCredential.user;
+    console.log("Auth user created:", user.uid);
+
+    // Update display name with full name
+    await updateProfile(user, {
+      displayName: `${firstName} ${lastName}`,
     });
-    if (supabaseError) throw supabaseError;
+    console.log("Display name updated to:", `${firstName} ${lastName}`);
 
-    const firebaseUser = await firebase
-      .auth()
-      .createUserWithEmailAndPassword(email, password);
+    // Create user document with role-specific fields
+    const userDocRef = doc(db, "users", user.uid);
+    const userDataForStore = {
+      firstName,
+      lastName,
+      username,
+      email,
+      role,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // Role-specific fields
+      ...(role === "athlete"
+        ? {
+            coachId: null,
+            activeBlocks: [],
+            previousBlocks: [],
+            status: "unassigned", // or 'pending' when they request a coach
+          }
+        : {
+            athletes: [], // Array of athlete UIDs for coaches
+          }),
+    };
 
-    await supabase.from("users").insert([{ id: user.id, email: user.email }]);
+    await setDoc(userDocRef, userDataForStore);
+    console.log("User data stored in Firestore");
 
-    return { user: firebaseUser.user, supabaseUser: user };
+    // Verify the update worked
+    const updatedUser = auth.currentUser;
+    console.log("Verified user data:", {
+      displayName: updatedUser.displayName,
+      email: updatedUser.email,
+      role: role,
+    });
+
+    return {
+      user: user,
+      userData: userDataForStore,
+    };
   } catch (error) {
-    console.error("Error signing up:", error);
-    throw error;
+    console.error("Signup error:", error);
+    if (error.code === "auth/email-already-in-use") {
+      throw { code: error.code, message: "This email is already registered" };
+    } else if (error.code === "auth/invalid-email") {
+      throw { code: error.code, message: "Invalid email address" };
+    } else if (error.code === "auth/weak-password") {
+      throw {
+        code: error.code,
+        message: "Password should be at least 6 characters",
+      };
+    } else {
+      throw {
+        code: "auth/unknown",
+        message: `Failed to create account: ${error.message}`,
+      };
+    }
   }
 };

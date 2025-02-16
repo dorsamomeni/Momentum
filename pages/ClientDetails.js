@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,9 +7,12 @@ import {
   ScrollView,
   Modal,
   TextInput,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { auth, db } from "../src/config/firebase";
+import { writeBatch, doc, arrayUnion } from "firebase/firestore";
 
 const ClientDetails = ({ route }) => {
   const navigation = useNavigation();
@@ -714,43 +717,65 @@ const ClientDetails = ({ route }) => {
   const [tempBlockName, setTempBlockName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const handleNewBlock = (blockName, sessionsPerWeek) => {
-    // Move current block to previous blocks if it exists
-    if (activeBlocks.length > 0) {
-      setPreviousBlocks([...activeBlocks, ...previousBlocks]);
+  const handleNewBlock = async (blockName, sessionsPerWeek) => {
+    try {
+      // Move current block to previous blocks if it exists
+      if (activeBlocks.length > 0) {
+        setPreviousBlocks([...activeBlocks, ...previousBlocks]);
+      }
+
+      // Create new block
+      const today = new Date();
+      const endDate = new Date();
+      endDate.setDate(today.getDate() + 28); // 4 weeks from today
+
+      const newBlock = {
+        id: Date.now().toString(),
+        name: blockName,
+        startDate: today.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        endDate: endDate.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        status: "active",
+        sessionsPerWeek,
+        weeks: [
+          {
+            exercises: Array(sessionsPerWeek).fill({
+              exercises: [],
+            }),
+          },
+        ],
+        coachId: auth.currentUser.uid,
+        athleteId: route.params.client.id,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Update both coach and athlete documents
+      const batch = writeBatch(db);
+
+      // Update athlete's active blocks
+      const athleteRef = doc(db, "users", route.params.client.id);
+      batch.update(athleteRef, {
+        activeBlocks: arrayUnion(newBlock),
+      });
+
+      // Store block in blocks collection
+      const blockRef = doc(db, "blocks", newBlock.id);
+      batch.set(blockRef, newBlock);
+
+      await batch.commit();
+
+      setActiveBlocks([newBlock]);
+    } catch (error) {
+      console.error("Error creating block:", error);
+      Alert.alert("Error", "Failed to create block");
     }
-
-    // Create new block
-    const today = new Date();
-    const endDate = new Date();
-    endDate.setDate(today.getDate() + 28); // 4 weeks from today
-
-    const newBlock = {
-      id: Date.now(),
-      name: blockName,
-      startDate: today.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      endDate: endDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      status: "active",
-      sessionsPerWeek,
-      weeks: [
-        {
-          // Start with just one week
-          exercises: Array(sessionsPerWeek).fill({
-            exercises: [], // Empty array for each day's exercises
-          }),
-        },
-      ],
-    };
-
-    setActiveBlocks([newBlock]);
   };
 
   const handleCloseBlock = (blockToClose) => {
@@ -828,7 +853,7 @@ const ClientDetails = ({ route }) => {
   };
 
   const filterBlocks = (blocks) => {
-    return blocks.filter((block) => 
+    return blocks.filter((block) =>
       block.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   };
@@ -843,6 +868,13 @@ const ClientDetails = ({ route }) => {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.settingsButton}
+        onPress={() => navigation.navigate("Settings")}
+      >
+        <Icon name="settings-outline" size={24} color="#000" />
+      </TouchableOpacity>
+
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
@@ -1260,6 +1292,13 @@ const styles = StyleSheet.create({
   actionButton: {
     padding: 4,
     marginRight: 8,
+  },
+  settingsButton: {
+    position: "absolute",
+    top: 60,
+    right: 20,
+    zIndex: 1,
+    padding: 10,
   },
 });
 
