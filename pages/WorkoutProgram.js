@@ -48,10 +48,6 @@ const WorkoutProgram = ({ route }) => {
   const weeks = Array(totalWeeks).fill(null);
   const scrollViewRef = useRef(null);
   const [isProgrammaticScroll, setIsProgrammaticScroll] = useState(false);
-  const [draggingIndex, setDraggingIndex] = useState(null);
-  const pan = useRef(new Animated.ValueXY()).current;
-  const itemHeight = 150;
-  const scrollOffset = useRef(0);
   const [weekNames, setWeekNames] = useState(
     Array(totalWeeks)
       .fill("")
@@ -63,7 +59,7 @@ const WorkoutProgram = ({ route }) => {
   const weeksSliderRef = useRef(null);
 
   const handleScroll = (event) => {
-    if (isProgrammaticScroll) return; // Skip if programmatic scroll
+    if (isProgrammaticScroll) return;
     const xOffset = event.nativeEvent.contentOffset.x;
     const week = Math.round(xOffset / width) + 1;
     setCurrentWeek(week);
@@ -230,99 +226,17 @@ const WorkoutProgram = ({ route }) => {
     setBlockWeeks(updatedWeeks);
   };
 
-  const moveItem = (fromIndex, toIndex, weekIndex, dayIndex) => {
-    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
-    const exercises = updatedWeeks[weekIndex].exercises[dayIndex].exercises;
-    const [movedItem] = exercises.splice(fromIndex, 1);
-    exercises.splice(toIndex, 0, movedItem);
-    setBlockWeeks(updatedWeeks);
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        pan.setOffset({
-          x: 0,
-          y: pan.y._value,
-        });
-        pan.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: Animated.event([null, { dy: pan.y }], {
-        useNativeDriver: false,
-      }),
-      onPanResponderRelease: (_, gesture) => {
-        pan.flattenOffset();
-
-        const currentOffset = scrollOffset.current;
-        const movePosition = gesture.dy + currentOffset;
-        const movedBy = Math.round(movePosition / itemHeight);
-
-        const newIndex = Math.max(
-          0,
-          Math.min(
-            draggingIndex + movedBy,
-            blockWeeks[currentWeek - 1].exercises[draggingIndex].exercises
-              .length - 1
-          )
-        );
-
-        if (newIndex !== draggingIndex) {
-          moveItem(draggingIndex, newIndex, currentWeek - 1, draggingIndex);
-        }
-
-        Animated.spring(pan, {
-          toValue: { x: 0, y: 0 },
-          useNativeDriver: false,
-          friction: 5,
-        }).start(() => {
-          setDraggingIndex(null);
-        });
-      },
-    })
-  ).current;
-
   const ExerciseItem = ({ exercise, index, weekIndex, dayIndex }) => {
-    const isDragging = draggingIndex === index;
-    const itemStyle = isDragging
-      ? {
-          transform: pan.getTranslateTransform(),
-          elevation: 5,
-          shadowColor: "#000",
-          shadowOpacity: 0.3,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 5 },
-          zIndex: 999,
-          backgroundColor: "#fff",
-          scale: pan.y.interpolate({
-            inputRange: [-200, 0, 200],
-            outputRange: [0.95, 1, 0.95],
-          }),
-        }
-      : {};
-
     return (
-      <Animated.View
-        style={[
-          styles.exercise,
-          itemStyle,
-          isDragging && { position: "absolute", left: 0, right: 0 },
-        ]}
-        {...(isDragging ? panResponder.panHandlers : {})}
-      >
+      <View style={styles.exercise}>
         <View style={styles.exerciseContent}>
           <View style={styles.exerciseNameRow}>
             <TextInput
               style={styles.exerciseNameInput}
               defaultValue={exercise.name}
               placeholder="Exercise name"
-              editable={!isDragging}
             />
-            <TouchableOpacity
-              style={[styles.dragHandle, isDragging && styles.dragHandleActive]}
-              onLongPress={() => setDraggingIndex(index)}
-            >
+            <TouchableOpacity style={styles.dragHandle}>
               <Text style={styles.dragHandleText}>☰</Text>
             </TouchableOpacity>
           </View>
@@ -373,7 +287,7 @@ const WorkoutProgram = ({ route }) => {
             />
           </View>
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -967,10 +881,6 @@ const styles = StyleSheet.create({
   },
   disabledButtonText: {
     opacity: 0.3,
-  },
-  dragHandleActive: {
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
   },
   renameButton: {
     padding: 4,
