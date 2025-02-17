@@ -1,32 +1,32 @@
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getFirestore, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 
 export const signup = async (userData) => {
   const { email, password, firstName, lastName, username, role } = userData;
 
   try {
-    // Create auth user
+    console.log("1. Creating auth user");
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
       password
     );
     const user = userCredential.user;
-    console.log("Auth user created:", user.uid);
+    console.log("2. Auth user created:", user.uid);
 
-    // Update display name with full name
+    // Update display name
     await updateProfile(user, {
       displayName: `${firstName} ${lastName}`,
     });
-    console.log("Display name updated to:", `${firstName} ${lastName}`);
+    console.log("3. Display name updated");
 
-    // Create user document with role-specific fields
+    // Create user document
     const userDocRef = doc(db, "users", user.uid);
     const userDataForStore = {
       firstName,
       lastName,
-      username,
+      username: username.toLowerCase(),
       email,
       role,
       createdAt: new Date().toISOString(),
@@ -37,26 +37,23 @@ export const signup = async (userData) => {
             coachId: null,
             activeBlocks: [],
             previousBlocks: [],
-            status: "unassigned", // or 'pending' when they request a coach
+            status: "unassigned",
           }
         : {
-            athletes: [], // Array of athlete UIDs for coaches
+            athletes: [],
           }),
+      coachRequests: [],
+      pendingRequests: [],
+      sentRequests: [],
+      status: "inactive",
     };
 
+    console.log("4. Attempting to create Firestore document");
     await setDoc(userDocRef, userDataForStore);
-    console.log("User data stored in Firestore");
-
-    // Verify the update worked
-    const updatedUser = auth.currentUser;
-    console.log("Verified user data:", {
-      displayName: updatedUser.displayName,
-      email: updatedUser.email,
-      role: role,
-    });
+    console.log("5. Firestore document created successfully");
 
     return {
-      user: user,
+      user,
       userData: userDataForStore,
     };
   } catch (error) {

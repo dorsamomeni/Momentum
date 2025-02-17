@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc } from "firebase/firestore";
 import { doc, updateDoc, arrayUnion } from "firebase/firestore";
 import { auth, db } from "../src/config/firebase";
 
@@ -20,62 +20,97 @@ const AddClient = () => {
   const [username, setUsername] = React.useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [isAthlete, setIsAthlete] = useState(false);
 
-  const searchAthletes = async (searchTerm) => {
+  useEffect(() => {
+    const checkUserRole = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        setIsAthlete(userData.role === "athlete");
+      }
+    };
+    checkUserRole();
+  }, []);
+
+  const searchUsers = async (searchTerm) => {
     if (!searchTerm.trim()) return;
 
     setSearching(true);
     try {
       const q = query(
         collection(db, "users"),
-        where("role", "==", "athlete"),
-        where("username", ">=", searchTerm.toLowerCase()),
-        where("username", "<=", searchTerm.toLowerCase() + "\uf8ff")
+        where("role", "==", isAthlete ? "coach" : "athlete"),
+        where("username", ">=", searchTerm),
+        where("username", "<=", searchTerm + "\uf8ff")
       );
 
       const querySnapshot = await getDocs(q);
-      const athletes = [];
+      const users = [];
       querySnapshot.forEach((doc) => {
-        const athleteData = doc.data();
-        if (!athleteData.coachId) {
-          // Only show unassigned athletes
-          athletes.push({
+        const userData = doc.data();
+        const currentUserId = auth.currentUser.uid;
+        const alreadyConnected = isAthlete
+          ? userData.athletes?.includes(currentUserId)
+          : userData.coachId === currentUserId;
+        const hasPendingRequest =
+          userData.pendingRequests?.includes(currentUserId) ||
+          userData.coachRequests?.includes(currentUserId);
+
+        if (!alreadyConnected && !hasPendingRequest) {
+          users.push({
             id: doc.id,
-            ...athleteData,
+            ...userData,
           });
         }
       });
-      setSearchResults(athletes);
+      setSearchResults(users);
     } catch (error) {
-      console.error("Error searching athletes:", error);
-      Alert.alert("Error", "Failed to search athletes");
+      console.error("Error searching users:", error);
+      Alert.alert("Error", "Failed to search users");
     } finally {
       setSearching(false);
     }
   };
 
-  const handleAddAthlete = async (athleteId) => {
+  const handleAddUser = async (userId) => {
     try {
-      const coachId = auth.currentUser.uid;
+      const currentUserId = auth.currentUser.uid;
 
-      // Update athlete document
-      const athleteRef = doc(db, "users", athleteId);
-      await updateDoc(athleteRef, {
-        coachId: coachId,
-        status: "active",
-      });
+      if (isAthlete) {
+        // Athlete sending request to coach
+        const coachRef = doc(db, "users", userId);
+        await updateDoc(coachRef, {
+          pendingRequests: arrayUnion(currentUserId),
+        });
 
-      // Update coach's athletes array
-      const coachRef = doc(db, "users", coachId);
-      await updateDoc(coachRef, {
-        athletes: arrayUnion(athleteId),
-      });
+        // Track sent request in athlete's document
+        const athleteRef = doc(db, "users", currentUserId);
+        await updateDoc(athleteRef, {
+          sentRequests: arrayUnion(userId),
+        });
 
-      Alert.alert("Success", "Athlete added successfully");
+        Alert.alert("Success", "Friend request sent to coach");
+      } else {
+        // Coach sending request to athlete
+        const athleteRef = doc(db, "users", userId);
+        await updateDoc(athleteRef, {
+          coachRequests: arrayUnion(currentUserId),
+        });
+
+        // Track sent request in coach's document
+        const coachRef = doc(db, "users", currentUserId);
+        await updateDoc(coachRef, {
+          sentRequests: arrayUnion(userId),
+        });
+
+        Alert.alert("Success", "Friend request sent to athlete");
+      }
       navigation.goBack();
     } catch (error) {
-      console.error("Error adding athlete:", error);
-      Alert.alert("Error", "Failed to add athlete");
+      console.error("Error sending request:", error);
+      Alert.alert("Error", "Failed to send request");
     }
   };
 
@@ -93,7 +128,7 @@ const AddClient = () => {
       >
         <Text style={styles.backButtonText}>←</Text>
       </TouchableOpacity>
-      <Text style={styles.title}>Add Client</Text>
+      <Text style={styles.title}>{isAthlete ? "Add Coach" : "Add Client"}</Text>
 
       <Image
         source={require("../assets/logo.png")}
@@ -105,13 +140,15 @@ const AddClient = () => {
         <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search athletes by username"
+          placeholder={`Search ${
+            isAthlete ? "coaches" : "athletes"
+          } by username`}
           placeholderTextColor="#666"
           autoCapitalize="none"
           value={username}
           onChangeText={(text) => {
             setUsername(text);
-            searchAthletes(text);
+            searchUsers(text);
           }}
           onSubmitEditing={() => {}}
           returnKeyType="search"
@@ -119,17 +156,21 @@ const AddClient = () => {
       </View>
 
       <ScrollView style={styles.resultsContainer}>
-        {searchResults.map((athlete) => (
-          <TouchableOpacity
-            key={athlete.id}
-            style={styles.athleteCard}
-            onPress={() => handleAddAthlete(athlete.id)}
-          >
-            <Text style={styles.athleteName}>
-              {athlete.firstName} {athlete.lastName}
-            </Text>
-            <Text style={styles.athleteUsername}>@{athlete.username}</Text>
-          </TouchableOpacity>
+        {searchResults.map((user) => (
+          <View key={user.id} style={styles.athleteCard}>
+            <View style={styles.userInfo}>
+              <Text style={styles.athleteName}>
+                {user.firstName} {user.lastName}
+              </Text>
+              <Text style={styles.athleteUsername}>@{user.username}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => handleAddUser(user.id)}
+            >
+              <Icon name="add-circle-outline" size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
         ))}
       </ScrollView>
     </View>
@@ -193,6 +234,12 @@ const styles = StyleSheet.create({
     padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#ccc",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  userInfo: {
+    flex: 1,
   },
   athleteName: {
     fontSize: 18,
@@ -201,6 +248,9 @@ const styles = StyleSheet.create({
   athleteUsername: {
     fontSize: 16,
     color: "#666",
+  },
+  addButton: {
+    padding: 8,
   },
 });
 

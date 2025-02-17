@@ -46,15 +46,13 @@ const SignUp = () => {
         result.userData.role
       );
 
-      // Clear navigation stack and navigate based on role
+      // Role-based navigation
       if (result.userData.role === "athlete") {
-        console.log("Navigating to AthleteHome");
         navigation.reset({
           index: 0,
           routes: [{ name: "AthleteHome" }],
         });
       } else if (result.userData.role === "coach") {
-        console.log("Navigating to Clients");
         navigation.reset({
           index: 0,
           routes: [{ name: "Clients" }],

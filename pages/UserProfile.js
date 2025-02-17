@@ -26,13 +26,6 @@ const UserProfile = ({ route }) => {
           <Text style={styles.addButtonText}>Add Client</Text>
         </TouchableOpacity>
       </View>
-
-      <TouchableOpacity 
-        style={styles.settingsButton}
-        onPress={() => navigation.navigate("Settings")}
-      >
-        <Text style={styles.settingsButtonText}>Settings</Text>
-      </TouchableOpacity>
     </View>
   );
 };
@@ -92,19 +85,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-    textAlign: "center",
-  },
-  settingsButton: {
-    padding: 16,
-    backgroundColor: "#f8f8f8",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-    marginTop: 16,
-  },
-  settingsButtonText: {
-    fontSize: 16,
-    color: "#000",
     textAlign: "center",
   },
 });

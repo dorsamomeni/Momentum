@@ -195,7 +195,7 @@ const WorkoutProgram = ({ route }) => {
         {
           scheme: "",
           weight: "",
-          setCount: "1", // Default to 1 set
+          setCount: "1",
         },
       ],
       notes: "",

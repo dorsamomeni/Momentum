@@ -869,13 +869,6 @@ const ClientDetails = ({ route }) => {
   return (
     <View style={styles.container}>
       <TouchableOpacity
-        style={styles.settingsButton}
-        onPress={() => navigation.navigate("Settings")}
-      >
-        <Icon name="settings-outline" size={24} color="#000" />
-      </TouchableOpacity>
-
-      <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
       >
@@ -1160,8 +1153,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBadge: {
-    padding: 4, // Match other button padding
-    opacity: 0.6, // Match other button opacity
+    padding: 4, 
+    opacity: 0.6, 
   },
   dateText: {
     color: "#666",
@@ -1292,13 +1285,6 @@ const styles = StyleSheet.create({
   actionButton: {
     padding: 4,
     marginRight: 8,
-  },
-  settingsButton: {
-    position: "absolute",
-    top: 60,
-    right: 20,
-    zIndex: 1,
-    padding: 10,
   },
 });
 

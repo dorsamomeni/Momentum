@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { signin } from "../src/auth/signin";
+import { getDoc, doc } from "firebase/firestore";
+import { auth, db } from "../src/config/firebase";
 
 const SignIn = () => {
   const navigation = useNavigation();
@@ -29,11 +31,22 @@ const SignIn = () => {
       const result = await signin(email, password);
       console.log("Signin successful:", result);
 
-      // Navigate all users to Clients screen
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Clients" }],
-      });
+      // Get user role from Firestore
+      const userDoc = await getDoc(doc(db, "users", result.user.uid));
+      const userData = userDoc.data();
+
+      // Role-based navigation
+      if (userData.role === "athlete") {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "AthleteHome" }],
+        });
+      } else {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Clients" }],
+        });
+      }
     } catch (error) {
       console.log("Signin error:", error);
       Alert.alert("Error", error.message);

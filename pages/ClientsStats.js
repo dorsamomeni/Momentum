@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    padding: 5, // Added for better touch target
+    padding: 5, 
   },
   yearLabel: {
     fontSize: 16,
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   dropdownIcon: {
-    marginTop: 2, // Small adjustment to align with text
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,

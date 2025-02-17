@@ -16,10 +16,10 @@ import UserProfile from "./pages/UserProfile";
 import ClientDetails from "./pages/ClientDetails";
 import CreateBlock from "./pages/CreateBlock";
 import WorkoutProgram from "./pages/WorkoutProgram";
-import Settings from "./pages/Settings";
 import { SettingsProvider } from "./contexts/SettingsContext";
-import AthleteHome from "./pages/AthleteHome";
+import AthleteTabs from "./navigation/AthleteTabs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import CoachRequests from "./pages/CoachRequests";
 
 const slides = [
   {
@@ -137,19 +137,20 @@ export default function App() {
               <Stack.Screen name="Welcome" component={Welcome} />
               <Stack.Screen
                 name="AthleteHome"
-                component={AthleteHome}
+                component={AthleteTabs}
                 options={{
-                  animationEnabled: false,
+                  headerShown: false,
+                  gestureEnabled: false,
                 }}
               />
               <Stack.Screen name="Clients" component={Clients} />
-              <Stack.Screen name="Settings" component={Settings} />
               <Stack.Screen name="ClientRequests" component={ClientRequests} />
               <Stack.Screen name="AddClient" component={AddClient} />
               <Stack.Screen name="ClientDetails" component={ClientDetails} />
               <Stack.Screen name="CreateBlock" component={CreateBlock} />
               <Stack.Screen name="WorkoutProgram" component={WorkoutProgram} />
               <Stack.Screen name="UserProfile" component={UserProfile} />
+              <Stack.Screen name="CoachRequests" component={CoachRequests} />
             </>
           )}
         </Stack.Navigator>

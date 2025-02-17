@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings } from "../contexts/SettingsContext";
 import { auth, db } from "../src/config/firebase";
 import { doc, getDoc, enableIndexedDbPersistence } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 
 // Enable offline persistence
 enableIndexedDbPersistence(db).catch((err) => {
   console.log("Persistence error:", err);
 });
 
-const ClientsSettings = () => {
+const AthleteSettings = () => {
   const navigation = useNavigation();
   const { weightUnit, toggleWeightUnit } = useSettings();
   const [userName, setUserName] = useState("");
@@ -27,48 +35,42 @@ const ClientsSettings = () => {
       console.log("Loading user data for:", user?.uid);
 
       if (user) {
-        // Split display name into first and last name
         const [first, ...last] = (user.displayName || "").split(" ");
         setFirstName(first || "");
         setLastName(last.join(" ") || "");
         setUserName(user.displayName || "User");
         setUserEmail(user.email || "");
 
-        // Get additional user data from Firestore with retries
         const maxRetries = 3;
         let retryCount = 0;
 
         while (retryCount < maxRetries) {
           try {
             const userDocRef = doc(db, "users", user.uid);
-            console.log("Fetching document from:", userDocRef.path);
-            
             const userDoc = await getDoc(userDocRef);
-            console.log("Document exists:", userDoc.exists());
-            
+
             if (userDoc.exists()) {
               const userData = userDoc.data();
-              console.log("Firestore user data:", userData);
-              
               setUsername(userData.username || "Not set");
               setUserRole(userData.role || "Not set");
-              break; // Success, exit retry loop
+              break;
             } else {
-              console.log("No user document found in Firestore");
               setUsername("Not found");
               setUserRole("Not found");
               break;
             }
           } catch (error) {
-            console.error(`Error fetching user data (attempt ${retryCount + 1}):`, error);
+            console.error(
+              `Error fetching user data (attempt ${retryCount + 1}):`,
+              error
+            );
             retryCount++;
-            
+
             if (retryCount === maxRetries) {
               setUsername("Error loading");
               setUserRole("Error loading");
             } else {
-              // Wait before retrying
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              await new Promise((resolve) => setTimeout(resolve, 1000));
             }
           }
         }
@@ -76,19 +78,21 @@ const ClientsSettings = () => {
     };
 
     loadUserData();
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      console.log("Auth state changed, user:", user?.uid);
-      loadUserData();
-    });
+    const unsubscribe = auth.onAuthStateChanged(loadUserData);
     return () => unsubscribe();
   }, []);
 
-  const handleChangePhoto = () => {
-    // Add photo change logic here
-  };
-
-  const handleLogout = () => {
-    navigation.navigate("SignIn");
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "OpeningScreen" }],
+      });
+    } catch (error) {
+      console.error("Error signing out:", error);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -96,10 +100,7 @@ const ClientsSettings = () => {
       "Delete Account",
       "Are you sure you want to delete your account? This action cannot be undone.",
       [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
@@ -120,10 +121,9 @@ const ClientsSettings = () => {
                 "Failed to delete account. You may need to sign in again."
               );
             }
-          }
-        }
-      ],
-      { cancelable: true }
+          },
+        },
+      ]
     );
   };
 
@@ -138,105 +138,101 @@ const ClientsSettings = () => {
 
       <Text style={styles.title}>Settings</Text>
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Account Information Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account Information</Text>
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>First Name</Text>
             <Text style={styles.infoValue}>{firstName || "Loading..."}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Last Name</Text>
             <Text style={styles.infoValue}>{lastName || "Loading..."}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Username</Text>
             <Text style={styles.infoValue}>{username || "Loading..."}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{userEmail}</Text>
+            <Text style={styles.infoValue}>{userEmail || "Loading..."}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Role</Text>
             <Text style={[styles.infoValue, styles.roleText]}>
-              {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : "Loading..."}
-            </Text>
-          </View>
-          
-          <View style={styles.separator} />
-          
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Account Created</Text>
-            <Text style={styles.infoValue}>
-              {auth.currentUser?.metadata?.creationTime 
-                ? new Date(auth.currentUser.metadata.creationTime).toLocaleDateString()
-                : "N/A"}
+              {userRole || "Loading..."}
             </Text>
           </View>
         </View>
 
-        {/* Weight Unit Section */}
+        {/* Preferences Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
-          <TouchableOpacity 
-            style={styles.option}
+
+          <TouchableOpacity
+            style={styles.settingOption}
             onPress={toggleWeightUnit}
           >
-            <Text style={styles.optionText}>
-              Currently using {weightUnit.toUpperCase()}
-            </Text>
-            <Text style={styles.optionHint}>
-              Tap to switch to {weightUnit === 'kg' ? 'LBS' : 'KG'}
-            </Text>
+            <View style={styles.optionLeft}>
+              <Text style={styles.optionText}>Weight Unit</Text>
+              <Text style={styles.optionSubtext}>
+                Change your preferred weight unit
+              </Text>
+            </View>
+            <Text style={styles.toggleText}>{weightUnit}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Logout Section */}
+        {/* Account Actions Section */}
         <View style={styles.section}>
-          <TouchableOpacity 
-            style={[styles.option, styles.logoutOption]}
+          <Text style={styles.sectionTitle}>Account Actions</Text>
+
+          <TouchableOpacity
+            style={[styles.settingOption, styles.logoutOption]}
             onPress={handleLogout}
           >
             <View style={styles.optionLeft}>
               <Icon name="log-out-outline" size={24} color="#FF3B30" />
-              <Text style={[styles.optionText, styles.logoutText]}>Logout</Text>
+              <Text style={styles.logoutText}>Log Out</Text>
             </View>
-            <Text style={styles.optionHint}>Sign out of your account</Text>
           </TouchableOpacity>
         </View>
 
         {/* Danger Zone Section */}
         <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionTitle, styles.dangerTitle]}>Danger Zone</Text>
-          
-          <TouchableOpacity 
-            style={[styles.option, styles.deleteOption]}
+          <Text style={[styles.sectionTitle, styles.dangerTitle]}>
+            Danger Zone
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.settingOption, styles.deleteOption]}
             onPress={handleDeleteAccount}
           >
             <View style={styles.optionLeft}>
               <Icon name="trash-outline" size={24} color="#FF3B30" />
-              <Text style={[styles.optionText, styles.deleteText]}>Delete Account</Text>
+              <Text style={styles.deleteText}>Delete Account</Text>
             </View>
-            <Text style={styles.dangerHint}>This action cannot be undone</Text>
           </TouchableOpacity>
+          <Text style={styles.dangerHint}>This action cannot be undone.</Text>
         </View>
 
-        {/* Bottom padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
@@ -247,41 +243,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+    paddingTop: 60,
   },
   backButton: {
     position: "absolute",
     top: 60,
     left: 20,
-    zIndex: 1,
+    zIndex: 10,
   },
   backButtonText: {
     fontSize: 28,
     color: "#000",
   },
   title: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "bold",
+    marginLeft: 20,
+    marginTop: 60,
     marginBottom: 20,
-    paddingHorizontal: 40,
-    marginTop: 100,
   },
   section: {
-    marginHorizontal: 40,
     marginBottom: 24,
     backgroundColor: "#fff",
     borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    marginHorizontal: 20,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600",
     marginBottom: 16,
     color: "#000",
@@ -304,10 +292,15 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: "#f0f0f0",
-    marginVertical: 4,
   },
-  option: {
+  settingOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 8,
     backgroundColor: "#f8f8f8",
     borderRadius: 12,
     borderWidth: 1,
@@ -322,25 +315,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
-  settingOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
   optionLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
   logoutOption: {
-    backgroundColor: '#FFF5F5',
-    borderColor: '#FFE5E5',
+    backgroundColor: "#FFF5F5",
+    borderColor: "#FFE5E5",
   },
   logoutText: {
-    color: '#FF3B30',
+    color: "#FF3B30",
     marginLeft: 10,
   },
   optionSubtext: {
@@ -354,37 +338,37 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   roleText: {
-    textTransform: 'capitalize',
-    color: '#007AFF',
+    textTransform: "capitalize",
+    color: "#007AFF",
   },
   dangerSection: {
     marginTop: 20,
-    borderColor: '#FFE5E5',
+    borderColor: "#FFE5E5",
     borderWidth: 1,
   },
   dangerTitle: {
-    color: '#FF3B30',
+    color: "#FF3B30",
   },
   deleteOption: {
-    backgroundColor: '#FFF5F5',
-    borderColor: '#FFE5E5',
+    backgroundColor: "#FFF5F5",
+    borderColor: "#FFE5E5",
   },
   deleteText: {
-    color: '#FF3B30',
+    color: "#FF3B30",
     marginLeft: 10,
   },
   dangerHint: {
     fontSize: 12,
-    color: '#FF3B30',
+    color: "#FF3B30",
     marginTop: 4,
   },
   scrollContainer: {
     flex: 1,
-    width: '100%',
+    width: "100%",
   },
   bottomPadding: {
-    height: 100, 
+    height: 100,
   },
 });
 
-export default ClientsSettings;
+export default AthleteSettings;

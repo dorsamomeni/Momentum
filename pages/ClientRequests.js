@@ -1,43 +1,105 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+} from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useNavigation } from "@react-navigation/native";
+import { auth, db } from "../src/config/firebase";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+} from "firebase/firestore";
 
 const ClientRequests = () => {
   const navigation = useNavigation();
+  const [requests, setRequests] = useState([]);
+  const [outgoingRequests, setOutgoingRequests] = useState([]);
 
-  const clients = [
-    {
-      name: "Francis Holzworth",
-      initial: "F",
-      color: "#A8E6CF",
-      logo: "https://example.com/logo1.png",
-    },
-    {
-      name: "Kaylyn Yokel",
-      initial: "K",
-      color: "#FF8C94",
-      logo: "https://example.com/logo2.png",
-    },
-    {
-      name: "Kimberly Muro",
-      initial: "K",
-      color: "#FFD3B6",
-      logo: "https://example.com/logo3.png",
-    },
-    {
-      name: "Jack Sause",
-      initial: "J",
-      color: "#8ed3de",
-      logo: "https://example.com/logo4.png",
-    },
-    {
-      name: "Rebekkah Lafantano",
-      initial: "R",
-      color: "#D3CFCF",
-      logo: "https://example.com/logo5.png",
-    },
-  ];
+  useEffect(() => {
+    const loadRequests = async () => {
+      try {
+        const user = auth.currentUser;
+        if (user) {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          const userData = userDoc.data();
+
+          // Get pending athlete requests
+          const pendingRequests = userData.pendingRequests || [];
+          const sentRequests = userData.sentRequests || [];
+
+          // Fetch athlete details for each request
+          const requestDetails = await Promise.all(
+            pendingRequests.map(async (athleteId) => {
+              const athleteDoc = await getDoc(doc(db, "users", athleteId));
+              return {
+                id: athleteId,
+                ...athleteDoc.data(),
+              };
+            })
+          );
+
+          setRequests(requestDetails);
+        }
+      } catch (error) {
+        console.error("Error loading requests:", error);
+      }
+    };
+
+    loadRequests();
+  }, []);
+
+  const handleAcceptRequest = async (athleteId) => {
+    try {
+      const coachId = auth.currentUser.uid;
+
+      // Update coach document
+      const coachRef = doc(db, "users", coachId);
+      await updateDoc(coachRef, {
+        athletes: arrayUnion(athleteId),
+        pendingRequests: arrayRemove(athleteId),
+      });
+
+      // Update athlete document
+      const athleteRef = doc(db, "users", athleteId);
+      await updateDoc(athleteRef, {
+        coachId: coachId,
+        status: "active",
+      });
+
+      // Remove request from local state
+      setRequests(requests.filter((req) => req.id !== athleteId));
+
+      Alert.alert("Success", "Client request accepted");
+    } catch (error) {
+      console.error("Error accepting request:", error);
+      Alert.alert("Error", "Failed to accept request");
+    }
+  };
+
+  const handleRejectRequest = async (athleteId) => {
+    try {
+      const coachRef = doc(db, "users", auth.currentUser.uid);
+      await updateDoc(coachRef, {
+        pendingRequests: arrayRemove(athleteId),
+      });
+
+      // Remove request from local state
+      setRequests(requests.filter((req) => req.id !== athleteId));
+
+      Alert.alert("Success", "Request rejected");
+    } catch (error) {
+      console.error("Error rejecting request:", error);
+      Alert.alert("Error", "Failed to reject request");
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -52,39 +114,46 @@ const ClientRequests = () => {
       </View>
 
       <ScrollView style={styles.requestsList}>
-        {clients.map((client, index) => (
-          <View key={index} style={styles.requestContainer}>
-            <View style={styles.leftContainer}>
-              <View
-                style={[styles.profilePhoto, { backgroundColor: client.color }]}
-              >
-                <Text style={styles.initial}>{client.initial}</Text>
-              </View>
-              <View style={styles.clientInfoContainer}>
-                <Text style={styles.clientName}>{client.name}</Text>
-              </View>
-            </View>
-
-            <View style={styles.actionsContainer}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => {
-                  /* Logic to accept request */
-                }}
-              >
-                <Icon name="checkmark-outline" size={18} color="#000" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => {
-                  /* Logic to reject request */
-                }}
-              >
-                <Icon name="close-outline" size={18} color="#000" />
-              </TouchableOpacity>
-            </View>
+        {requests.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No pending requests</Text>
           </View>
-        ))}
+        ) : (
+          requests.map((athlete) => (
+            <View key={athlete.id} style={styles.requestContainer}>
+              <View style={styles.leftContainer}>
+                <View
+                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                >
+                  <Text style={styles.initial}>
+                    {athlete.firstName[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.clientInfoContainer}>
+                  <Text style={styles.clientName}>
+                    {athlete.firstName} {athlete.lastName}
+                  </Text>
+                  <Text style={styles.username}>@{athlete.username}</Text>
+                </View>
+              </View>
+
+              <View style={styles.actionsContainer}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleAcceptRequest(athlete.id)}
+                >
+                  <Icon name="checkmark-outline" size={18} color="#000" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleRejectRequest(athlete.id)}
+                >
+                  <Icon name="close-outline" size={18} color="#000" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -150,6 +219,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#000",
   },
+  username: {
+    fontSize: 14,
+    color: "#666",
+  },
   actionsContainer: {
     flexDirection: "row",
     gap: 8,
@@ -161,6 +234,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#fff",
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#666",
   },
 });
 
