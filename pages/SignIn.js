@@ -19,6 +19,7 @@ const SignIn = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -75,18 +76,15 @@ const SignIn = () => {
 
         <View style={styles.inputContainer}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email address</Text>
+            <Text style={styles.label}>Email or username</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your email"
+              placeholder="Enter your email or username"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
-              keyboardType="email-address"
               placeholderTextColor="#666"
               returnKeyType="next"
-              autoComplete="email"
-              textContentType="emailAddress"
               enablesReturnKeyAutomatically
               importantForAutofill="yes"
             />
@@ -94,19 +92,24 @@ const SignIn = () => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor="#666"
-              returnKeyType="done"
-              autoComplete="password"
-              textContentType="password"
-              enablesReturnKeyAutomatically
-              importantForAutofill="yes"
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter your password"
+                placeholderTextColor="#666"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.showButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={styles.showButtonText}>
+                  {showPassword ? "Hide" : "Show"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -202,6 +205,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     color: "#000",
     height: 56,
+  },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    height: 56,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 16,
+    fontSize: 16,
+    color: "#000",
+  },
+  showButton: {
+    padding: 16,
+  },
+  showButtonText: {
+    color: "#666",
+    fontSize: 16,
   },
   signInButton: {
     backgroundColor: "#000",

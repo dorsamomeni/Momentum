@@ -28,6 +28,20 @@ const SignUp = () => {
       return;
     }
 
+    // Basic username validation
+    if (username.length < 3) {
+      Alert.alert("Error", "Username must be at least 3 characters long");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      Alert.alert(
+        "Error",
+        "Username can only contain letters, numbers, and underscores"
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const userData = {
@@ -35,7 +49,7 @@ const SignUp = () => {
         password,
         firstName,
         lastName,
-        username,
+        username: username.toLowerCase(), // Ensure username is lowercase
         role,
       };
 

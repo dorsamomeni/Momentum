@@ -1,11 +1,29 @@
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc, getFirestore, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
 import { auth, db } from "../config/firebase";
 
 export const signup = async (userData) => {
   const { email, password, firstName, lastName, username, role } = userData;
 
   try {
+    // Check if username already exists
+    const usernameQuery = query(
+      collection(db, "users"),
+      where("username", "==", username.toLowerCase())
+    );
+    const usernameSnapshot = await getDocs(usernameQuery);
+
+    if (!usernameSnapshot.empty) {
+      throw new Error("Username already taken. Please choose another one.");
+    }
+
     console.log("1. Creating auth user");
     const userCredential = await createUserWithEmailAndPassword(
       auth,
