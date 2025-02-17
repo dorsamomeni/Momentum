@@ -46,7 +46,10 @@ const AthleteHome = () => {
           if (data.coachId) {
             const coachDoc = await getDoc(doc(db, "users", data.coachId));
             if (coachDoc.exists()) {
-              setCoachData(coachDoc.data());
+              setCoachData({
+                id: data.coachId,
+                ...coachDoc.data(),
+              });
             }
           }
         }
@@ -56,7 +59,7 @@ const AthleteHome = () => {
     };
 
     loadUserData();
-  }, [userData?.coachId]);
+  }, []);
 
   const handleRemoveCoach = async () => {
     try {
@@ -101,9 +104,9 @@ const AthleteHome = () => {
       onPress={() =>
         navigation.navigate("WorkoutProgram", {
           block,
-          onCloseBlock: () => {}, // Add close block functionality 
+          onCloseBlock: () => {}, // Add close block functionality
           isPreviousBlock: isPrevious,
-          onReopenBlock: () => {}, // Add reopen block functionality 
+          onReopenBlock: () => {}, // Add reopen block functionality
           isAthlete: true,
         })
       }
@@ -147,43 +150,41 @@ const AthleteHome = () => {
         {coachData ? (
           <View style={styles.coachCard}>
             <View style={styles.coachHeader}>
-              <View>
-                <Text style={styles.coachName}>
-                  {coachData.firstName} {coachData.lastName}
-                </Text>
-                <Text style={styles.coachUsername}>@{coachData.username}</Text>
+              <View style={styles.coachInfo}>
+                <View
+                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                >
+                  <Text style={styles.initial}>
+                    {coachData.firstName[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.coachDetails}>
+                  <Text style={styles.coachName}>
+                    {coachData.firstName} {coachData.lastName}
+                  </Text>
+                  <Text style={styles.coachUsername}>
+                    @{coachData.username}
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity
                 style={styles.removeButton}
-                onPress={() => {
-                  Alert.alert(
-                    "Remove Coach",
-                    "Are you sure you want to remove this coach?",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Remove",
-                        onPress: handleRemoveCoach,
-                        style: "destructive",
-                      },
-                    ]
-                  );
-                }}
+                onPress={handleRemoveCoach}
               >
-                <Icon name="close-circle-outline" size={24} color="#000" />
+                <Icon name="close-outline" size={24} color="#666" />
               </TouchableOpacity>
             </View>
           </View>
         ) : (
           <View style={styles.noCoachContainer}>
             <Text style={styles.noCoachText}>
-              Add a coach to receive a program
+              Connect with a coach to get started
             </Text>
             <TouchableOpacity
               style={styles.addCoachButton}
               onPress={() => navigation.navigate("AddClient")}
             >
-              <Text style={styles.addCoachButtonText}>Find Coach</Text>
+              <Text style={styles.addCoachButtonText}>Add</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -262,8 +263,8 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
+    marginBottom: 8,
     color: "#000",
-    marginBottom: 16,
   },
   blockCard: {
     backgroundColor: "#fff",
@@ -320,14 +321,34 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   coachHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  removeButton: {
-    padding: 4,
+  coachInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  profilePhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  initial: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  coachDetails: {
+    marginLeft: 16,
+    flex: 1,
   },
   coachName: {
     fontSize: 18,
@@ -338,6 +359,9 @@ const styles = StyleSheet.create({
   coachUsername: {
     fontSize: 14,
     color: "#666",
+  },
+  removeButton: {
+    padding: 4,
   },
   noCoachContainer: {
     flexDirection: "row",

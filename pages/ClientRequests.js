@@ -46,7 +46,19 @@ const ClientRequests = () => {
             })
           );
 
+          // Fetch details of sent requests
+          const sentRequestDetails = await Promise.all(
+            sentRequests.map(async (athleteId) => {
+              const athleteDoc = await getDoc(doc(db, "users", athleteId));
+              return {
+                id: athleteId,
+                ...athleteDoc.data(),
+              };
+            })
+          );
+
           setRequests(requestDetails);
+          setOutgoingRequests(sentRequestDetails);
         }
       } catch (error) {
         console.error("Error loading requests:", error);
@@ -65,19 +77,30 @@ const ClientRequests = () => {
       await updateDoc(coachRef, {
         athletes: arrayUnion(athleteId),
         pendingRequests: arrayRemove(athleteId),
+        sentRequests: arrayRemove(athleteId),
+        clientList: arrayUnion({
+          athleteId: athleteId,
+          dateAdded: new Date().toISOString(),
+          status: "active",
+        }),
       });
 
       // Update athlete document
       const athleteRef = doc(db, "users", athleteId);
       await updateDoc(athleteRef, {
         coachId: coachId,
+        sentRequests: arrayRemove(coachId),
         status: "active",
       });
 
       // Remove request from local state
       setRequests(requests.filter((req) => req.id !== athleteId));
+      setOutgoingRequests(
+        outgoingRequests.filter((req) => req.id !== athleteId)
+      );
 
       Alert.alert("Success", "Client request accepted");
+      navigation.goBack();
     } catch (error) {
       console.error("Error accepting request:", error);
       Alert.alert("Error", "Failed to accept request");
@@ -101,19 +124,43 @@ const ClientRequests = () => {
     }
   };
 
+  const handleCancelRequest = async (athleteId) => {
+    try {
+      const coachRef = doc(db, "users", auth.currentUser.uid);
+      await updateDoc(coachRef, {
+        sentRequests: arrayRemove(athleteId),
+      });
+
+      // Remove from athlete's requests
+      const athleteRef = doc(db, "users", athleteId);
+      await updateDoc(athleteRef, {
+        coachRequests: arrayRemove(auth.currentUser.uid),
+      });
+
+      // Remove request from local state
+      setOutgoingRequests(
+        outgoingRequests.filter((req) => req.id !== athleteId)
+      );
+
+      Alert.alert("Success", "Request cancelled");
+    } catch (error) {
+      console.error("Error cancelling request:", error);
+      Alert.alert("Error", "Failed to cancel request");
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Client Requests</Text>
-      </View>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.backButtonText}>←</Text>
+      </TouchableOpacity>
+      <Text style={styles.title}>Client Requests</Text>
 
       <ScrollView style={styles.requestsList}>
+        <Text style={styles.sectionTitle}>Incoming Requests</Text>
         {requests.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>No pending requests</Text>
@@ -154,6 +201,43 @@ const ClientRequests = () => {
             </View>
           ))
         )}
+
+        <Text style={[styles.sectionTitle, styles.outgoingTitle]}>
+          Outgoing Requests
+        </Text>
+        {outgoingRequests.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No outgoing requests</Text>
+          </View>
+        ) : (
+          outgoingRequests.map((athlete) => (
+            <View key={athlete.id} style={styles.requestContainer}>
+              <View style={styles.leftContainer}>
+                <View
+                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                >
+                  <Text style={styles.initial}>
+                    {athlete.firstName[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.clientInfoContainer}>
+                  <Text style={styles.clientName}>
+                    {athlete.firstName} {athlete.lastName}
+                  </Text>
+                  <Text style={styles.username}>@{athlete.username}</Text>
+                </View>
+              </View>
+              <View style={styles.actionsContainer}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleCancelRequest(athlete.id)}
+                >
+                  <Icon name="close-outline" size={18} color="#000" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -163,16 +247,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 40,
-    paddingTop: 140,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 30,
+    paddingTop: 60,
   },
   backButton: {
-    marginRight: 20,
+    position: "absolute",
+    top: 60,
+    left: 20,
+    zIndex: 10,
+    padding: 10,
   },
   backButtonText: {
     fontSize: 28,
@@ -181,9 +263,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 30,
     fontWeight: "bold",
+    marginTop: 100,
+    marginBottom: 30,
+    marginLeft: 20,
   },
   requestsList: {
     flex: 1,
+    paddingHorizontal: 20,
   },
   requestContainer: {
     flexDirection: "row",
@@ -192,6 +278,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   leftContainer: {
     flexDirection: "row",
@@ -218,6 +306,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#000",
+    marginBottom: 4,
   },
   username: {
     fontSize: 14,
@@ -234,16 +323,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 40,
+    padding: 20,
+    backgroundColor: "#f8f8f8",
+    borderRadius: 12,
+    marginBottom: 12,
   },
   emptyStateText: {
     fontSize: 16,
     color: "#666",
+    fontStyle: "italic",
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 16,
+    color: "#000",
+  },
+  outgoingTitle: {
+    marginTop: 32,
   },
 });
 

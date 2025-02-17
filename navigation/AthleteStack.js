@@ -1,9 +1,9 @@
-import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
-import AthleteHome from '../pages/AthleteHome';
-import WorkoutProgram from '../pages/WorkoutProgram';
-import Settings from '../pages/Settings';
-import UserProfile from '../pages/UserProfile';
+import React from "react";
+import { createStackNavigator } from "@react-navigation/stack";
+import AthleteHome from "../pages/AthleteHome";
+import WorkoutProgram from "../pages/WorkoutProgram";
+import Settings from "../pages/Settings";
+import UserProfile from "../pages/UserProfile";
 
 const Stack = createStackNavigator();
 
@@ -18,4 +18,4 @@ const AthleteStack = () => {
   );
 };
 
-export default AthleteStack; 
+export default AthleteStack;
