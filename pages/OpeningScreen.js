@@ -25,10 +25,10 @@ const OpeningScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.testButton}
+          style={styles.devButton}
           onPress={() => navigation.navigate("Clients")}
         >
-          <Text style={styles.testButtonText}>Test</Text>
+          <Text style={styles.devButtonText}>Test</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -86,15 +86,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  testButton: {
-    backgroundColor: "#007BFF",
-    padding: 10,
-    borderRadius: 5,
+  devButton: {
+    padding: 8,
     alignItems: "center",
+    marginTop: 8,
   },
-  testButtonText: {
-    color: "#fff",
-    fontSize: 16,
+  devButtonText: {
+    color: "#999",
+    fontSize: 12,
   },
 });
 

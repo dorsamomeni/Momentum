@@ -32,13 +32,13 @@ const slides = [
     id: 2,
     title: "Programming Made Simpler",
     description: "Create and view programs faster than ever",
-    image: require("./assets/onboard1.jpg"),
+    image: require("./assets/onboard2.png"),
   },
   {
     id: 3,
     title: "Progress made clearer",
     description: "Track performance in one place",
-    image: require("./assets/onboard1.jpg"),
+    image: require("./assets/onboard3.png"),
   },
 ];
 

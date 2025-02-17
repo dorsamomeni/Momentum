@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
-import { useSettings } from '../contexts/SettingsContext';
+import { useSettings } from "../contexts/SettingsContext";
 import { auth, db } from "../src/config/firebase";
-import { doc, getDoc, enableIndexedDbPersistence } from "firebase/firestore";
-
-// Enable offline persistence
-enableIndexedDbPersistence(db).catch((err) => {
-  console.log("Persistence error:", err);
-});
+import { doc, getDoc } from "firebase/firestore";
 
 const ClientsSettings = () => {
   const navigation = useNavigation();
@@ -42,14 +44,14 @@ const ClientsSettings = () => {
           try {
             const userDocRef = doc(db, "users", user.uid);
             console.log("Fetching document from:", userDocRef.path);
-            
+
             const userDoc = await getDoc(userDocRef);
             console.log("Document exists:", userDoc.exists());
-            
+
             if (userDoc.exists()) {
               const userData = userDoc.data();
               console.log("Firestore user data:", userData);
-              
+
               setUsername(userData.username || "Not set");
               setUserRole(userData.role || "Not set");
               break; // Success, exit retry loop
@@ -60,15 +62,18 @@ const ClientsSettings = () => {
               break;
             }
           } catch (error) {
-            console.error(`Error fetching user data (attempt ${retryCount + 1}):`, error);
+            console.error(
+              `Error fetching user data (attempt ${retryCount + 1}):`,
+              error
+            );
             retryCount++;
-            
+
             if (retryCount === maxRetries) {
               setUsername("Error loading");
               setUserRole("Error loading");
             } else {
               // Wait before retrying
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              await new Promise((resolve) => setTimeout(resolve, 1000));
             }
           }
         }
@@ -98,7 +103,7 @@ const ClientsSettings = () => {
       [
         {
           text: "Cancel",
-          style: "cancel"
+          style: "cancel",
         },
         {
           text: "Delete",
@@ -120,8 +125,8 @@ const ClientsSettings = () => {
                 "Failed to delete account. You may need to sign in again."
               );
             }
-          }
-        }
+          },
+        },
       ],
       { cancelable: true }
     );
@@ -138,53 +143,60 @@ const ClientsSettings = () => {
 
       <Text style={styles.title}>Settings</Text>
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Account Information Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account Information</Text>
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>First Name</Text>
             <Text style={styles.infoValue}>{firstName || "Loading..."}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Last Name</Text>
             <Text style={styles.infoValue}>{lastName || "Loading..."}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Username</Text>
             <Text style={styles.infoValue}>{username || "Loading..."}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Email</Text>
             <Text style={styles.infoValue}>{userEmail}</Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Role</Text>
             <Text style={[styles.infoValue, styles.roleText]}>
-              {userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : "Loading..."}
+              {userRole
+                ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
+                : "Loading..."}
             </Text>
           </View>
-          
+
           <View style={styles.separator} />
-          
+
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Account Created</Text>
             <Text style={styles.infoValue}>
-              {auth.currentUser?.metadata?.creationTime 
-                ? new Date(auth.currentUser.metadata.creationTime).toLocaleDateString()
+              {auth.currentUser?.metadata?.creationTime
+                ? new Date(
+                    auth.currentUser.metadata.creationTime
+                  ).toLocaleDateString()
                 : "N/A"}
             </Text>
           </View>
@@ -193,22 +205,19 @@ const ClientsSettings = () => {
         {/* Weight Unit Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
-          <TouchableOpacity 
-            style={styles.option}
-            onPress={toggleWeightUnit}
-          >
+          <TouchableOpacity style={styles.option} onPress={toggleWeightUnit}>
             <Text style={styles.optionText}>
               Currently using {weightUnit.toUpperCase()}
             </Text>
             <Text style={styles.optionHint}>
-              Tap to switch to {weightUnit === 'kg' ? 'LBS' : 'KG'}
+              Tap to switch to {weightUnit === "kg" ? "LBS" : "KG"}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Logout Section */}
         <View style={styles.section}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.option, styles.logoutOption]}
             onPress={handleLogout}
           >
@@ -222,17 +231,34 @@ const ClientsSettings = () => {
 
         {/* Danger Zone Section */}
         <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionTitle, styles.dangerTitle]}>Danger Zone</Text>
-          
-          <TouchableOpacity 
+          <Text style={[styles.sectionTitle, styles.dangerTitle]}>
+            Danger Zone
+          </Text>
+
+          <TouchableOpacity
             style={[styles.option, styles.deleteOption]}
             onPress={handleDeleteAccount}
           >
             <View style={styles.optionLeft}>
               <Icon name="trash-outline" size={24} color="#FF3B30" />
-              <Text style={[styles.optionText, styles.deleteText]}>Delete Account</Text>
+              <Text style={[styles.optionText, styles.deleteText]}>
+                Delete Account
+              </Text>
             </View>
             <Text style={styles.dangerHint}>This action cannot be undone</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Back Button Section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={[styles.option, styles.backOption]}
+            onPress={() => navigation.goBack()}
+          >
+            <View style={styles.optionLeft}>
+              <Icon name="arrow-back-outline" size={24} color="#000" />
+              <Text style={styles.optionText}>Back to Clients</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -257,6 +283,7 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 28,
     color: "#000",
+    paddingBottom: 50,
   },
   title: {
     fontSize: 30,
@@ -336,11 +363,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoutOption: {
-    backgroundColor: '#FFF5F5',
-    borderColor: '#FFE5E5',
+    backgroundColor: "#FFF5F5",
+    borderColor: "#FFE5E5",
   },
   logoutText: {
-    color: '#FF3B30',
+    color: "#FF3B30",
     marginLeft: 10,
   },
   optionSubtext: {
@@ -354,36 +381,40 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   roleText: {
-    textTransform: 'capitalize',
-    color: '#007AFF',
+    textTransform: "capitalize",
+    color: "#007AFF",
   },
   dangerSection: {
     marginTop: 20,
-    borderColor: '#FFE5E5',
+    borderColor: "#FFE5E5",
     borderWidth: 1,
   },
   dangerTitle: {
-    color: '#FF3B30',
+    color: "#FF3B30",
   },
   deleteOption: {
-    backgroundColor: '#FFF5F5',
-    borderColor: '#FFE5E5',
+    backgroundColor: "#FFF5F5",
+    borderColor: "#FFE5E5",
   },
   deleteText: {
-    color: '#FF3B30',
+    color: "#FF3B30",
     marginLeft: 10,
   },
   dangerHint: {
     fontSize: 12,
-    color: '#FF3B30',
+    color: "#FF3B30",
     marginTop: 4,
+  },
+  backOption: {
+    backgroundColor: "#f8f8f8",
+    borderColor: "#f0f0f0",
   },
   scrollContainer: {
     flex: 1,
-    width: '100%',
+    width: "100%",
   },
   bottomPadding: {
-    height: 100, 
+    height: 100,
   },
 });
 
