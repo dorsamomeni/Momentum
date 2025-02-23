@@ -51,6 +51,8 @@ const AthleteHome = () => {
                 ...coachDoc.data(),
               });
             }
+          } else {
+            setCoachData(null); // Reset coach data if no coach is assigned
           }
         }
       } catch (error) {

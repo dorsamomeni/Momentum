@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,42 +9,42 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useNavigation } from "@react-navigation/native";
+import { auth, db } from "../src/config/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 const ClientsList = () => {
   const navigation = useNavigation();
+  const [clients, setClients] = useState([]);
 
-  const clients = [
-    {
-      name: "Francis Holzworth",
-      initial: "F",
-      color: "#A8E6CF",
-      logo: "https://example.com/logo1.png",
-    },
-    {
-      name: "Kaylyn Yokel",
-      initial: "K",
-      color: "#FF8C94",
-      logo: "https://example.com/logo2.png",
-    },
-    {
-      name: "Kimberly Muro",
-      initial: "K",
-      color: "#FFD3B6",
-      logo: "https://example.com/logo3.png",
-    },
-    {
-      name: "Jack Sause",
-      initial: "J",
-      color: "#8ed3de",
-      logo: "https://example.com/logo4.png",
-    },
-    {
-      name: "Rebekkah Lafantano",
-      initial: "R",
-      color: "#D3CFCF",
-      logo: "https://example.com/logo5.png",
-    },
-  ];
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        const coachId = auth.currentUser.uid;
+        const coachDoc = await getDoc(doc(db, "users", coachId));
+        const coachData = coachDoc.data();
+        
+        // Get the list of athlete IDs
+        const athleteIds = coachData.athletes || [];
+        
+        // Fetch each athlete's details
+        const athleteDetails = await Promise.all(
+          athleteIds.map(async (athleteId) => {
+            const athleteDoc = await getDoc(doc(db, "users", athleteId));
+            return {
+              id: athleteId,
+              ...athleteDoc.data(),
+            };
+          })
+        );
+        
+        setClients(athleteDetails);
+      } catch (error) {
+        console.error("Error loading clients:", error);
+      }
+    };
+
+    loadClients();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -69,36 +69,47 @@ const ClientsList = () => {
       </View>
 
       <ScrollView style={styles.clientsList}>
-        {clients.map((client, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.clientContainer}
-            onPress={() => navigation.navigate("ClientDetails", { client })}
-          >
-            <View style={styles.leftContainer}>
-              <View
-                style={[styles.profilePhoto, { backgroundColor: client.color }]}
-              >
-                <Text style={styles.initial}>{client.initial}</Text>
+        {clients.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No clients yet</Text>
+          </View>
+        ) : (
+          clients.map((client) => (
+            <TouchableOpacity
+              key={client.id}
+              style={styles.clientContainer}
+              onPress={() => navigation.navigate("ClientDetails", { client })}
+            >
+              <View style={styles.leftContainer}>
+                <View
+                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                >
+                  <Text style={styles.initial}>
+                    {client.firstName[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.clientInfoContainer}>
+                  <Text style={styles.clientName}>
+                    {client.firstName} {client.lastName}
+                  </Text>
+                  <Text style={styles.username}>@{client.username}</Text>
+                </View>
               </View>
-              <View style={styles.clientInfoContainer}>
-                <Text style={styles.clientName}>{client.name}</Text>
-              </View>
-            </View>
 
-            <View style={styles.rightContainer}>
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  /* Logic to reject client */
-                }}
-              >
-                <Icon name="close" size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ))}
+              <View style={styles.rightContainer}>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    /* Logic to remove client */
+                  }}
+                >
+                  <Icon name="close" size={20} color="#666" />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -186,6 +197,22 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#666",
+    fontStyle: "italic",
+  },
+  username: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
   },
 });
 
