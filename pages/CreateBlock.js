@@ -116,12 +116,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 40,
-    paddingBottom: 90,
+    paddingTop: 140,
   },
   backButton: {
     position: "absolute",
     top: 60,
-    left: 20,
+    left: 40,
     zIndex: 1,
   },
   backButtonText: {
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     color: "#000",
   },
   title: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "bold",
     marginBottom: 40,
   },

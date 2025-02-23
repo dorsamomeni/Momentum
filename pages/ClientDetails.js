@@ -875,14 +875,22 @@ const ClientDetails = ({ route }) => {
         <Text style={styles.backButtonText}>←</Text>
       </TouchableOpacity>
 
-      <ScrollView>
-        <View style={styles.header}>
-          <View
-            style={[styles.profilePhoto, { backgroundColor: client.color }]}
-          >
-            <Text style={styles.initial}>{client.initial}</Text>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.clientHeader}>
+          <View style={styles.clientInfo}>
+            <View style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}>
+              <Text style={styles.initial}>
+                {client.firstName[0].toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.nameContainer}>
+              <Text style={styles.clientName}>
+                {client.firstName} {client.lastName}
+              </Text>
+              <Text style={styles.username}>@{client.username}</Text>
+            </View>
           </View>
-          <Text style={styles.title}>{client.name}</Text>
+
           <TouchableOpacity
             style={styles.newBlockButton}
             onPress={() => {
@@ -1083,23 +1091,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  scrollView: {
+    flex: 1,
     padding: 40,
-    paddingTop: 140,
-    paddingBottom: 60,
+    paddingTop: 100, // Adjusted to account for back button
   },
   backButton: {
     position: "absolute",
     top: 60,
-    left: 20,
+    left: 40,
     zIndex: 1,
   },
   backButtonText: {
     fontSize: 28,
     color: "#000",
   },
-  header: {
+  clientHeader: {
+    marginBottom: 24,
     alignItems: "center",
-    marginBottom: 40,
+    marginTop: 40,
+  },
+  clientInfo: {
+    alignItems: "center",
   },
   profilePhoto: {
     width: 120,
@@ -1107,16 +1121,37 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   initial: {
     color: "#fff",
     fontSize: 48,
     fontWeight: "bold",
   },
-  title: {
-    fontSize: 30,
+  nameContainer: {
+    alignItems: "center",
+  },
+  clientName: {
+    fontSize: 24,
     fontWeight: "bold",
+    color: "#000",
+  },
+  username: {
+    fontSize: 16,
+    color: "#666",
+    marginTop: 4,
+  },
+  newBlockButton: {
+    backgroundColor: "#000",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 20,
+  },
+  newBlockText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   blocksSection: {
     marginTop: 20,
@@ -1153,24 +1188,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBadge: {
-    padding: 4, 
-    opacity: 0.6, 
+    padding: 4,
+    opacity: 0.6,
   },
   dateText: {
     color: "#666",
     fontSize: 14,
-  },
-  newBlockButton: {
-    backgroundColor: "#000",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    marginTop: 15,
-  },
-  newBlockText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
   },
   noBlockContainer: {
     padding: 20,
