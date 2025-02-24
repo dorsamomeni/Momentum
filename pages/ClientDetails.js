@@ -12,23 +12,14 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { auth, db } from "../src/config/firebase";
-import { writeBatch, doc, arrayUnion } from "firebase/firestore";
+import { writeBatch, doc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
 
 const ClientDetails = ({ route }) => {
   const navigation = useNavigation();
   const { client } = route.params;
 
   // Change currentBlock to activeBlocks array
-  const [activeBlocks, setActiveBlocks] = useState([
-    {
-      id: 1,
-      name: "Strength Block",
-      startDate: "Mar 1, 2024",
-      endDate: "Mar 28, 2024",
-      status: "active",
-      sessionsPerWeek: 3,
-    },
-  ]);
+  const [activeBlocks, setActiveBlocks] = useState([]);
 
   const [previousBlocks, setPreviousBlocks] = useState([
     {
@@ -717,8 +708,39 @@ const ClientDetails = ({ route }) => {
   const [tempBlockName, setTempBlockName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
+  useEffect(() => {
+    const loadBlocks = async () => {
+      try {
+        console.log("Loading blocks for athlete:", route.params.client.id);
+        const athleteRef = doc(db, "users", route.params.client.id);
+        const athleteDoc = await getDoc(athleteRef);
+        const athleteData = athleteDoc.data();
+
+        console.log("Athlete data:", athleteData);
+
+        if (athleteData) {
+          const blocks = athleteData.activeBlocks || [];
+          // Sort blocks by createdAt date
+          blocks.sort((a, b) => {
+            const dateA = new Date(a.createdAt || 0);
+            const dateB = new Date(b.createdAt || 0);
+            return dateB - dateA;
+          });
+          console.log("Setting active blocks:", blocks);
+          setActiveBlocks(blocks);
+        }
+      } catch (error) {
+        console.error("Error loading blocks:", error);
+        Alert.alert("Error", "Failed to load training blocks");
+      }
+    };
+
+    loadBlocks();
+  }, []);
+
   const handleNewBlock = async (blockName, sessionsPerWeek) => {
     try {
+      console.log("Creating new block:", blockName);
       // Move current block to previous blocks if it exists
       if (activeBlocks.length > 0) {
         setPreviousBlocks([...activeBlocks, ...previousBlocks]);
@@ -756,6 +778,9 @@ const ClientDetails = ({ route }) => {
         createdAt: new Date().toISOString(),
       };
 
+      // Add console log before updating Firebase
+      console.log("New block to be added:", newBlock);
+
       // Update both coach and athlete documents
       const batch = writeBatch(db);
 
@@ -771,7 +796,17 @@ const ClientDetails = ({ route }) => {
 
       await batch.commit();
 
-      setActiveBlocks([newBlock]);
+      console.log("Block added successfully");
+      // Update local state with the new block
+      setActiveBlocks(currentBlocks => {
+        const updatedBlocks = [...currentBlocks, newBlock].sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        });
+        console.log("Updated active blocks:", updatedBlocks);
+        return updatedBlocks;
+      });
     } catch (error) {
       console.error("Error creating block:", error);
       Alert.alert("Error", "Failed to create block");
@@ -853,9 +888,16 @@ const ClientDetails = ({ route }) => {
   };
 
   const filterBlocks = (blocks) => {
-    return blocks.filter((block) =>
-      block.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    return blocks
+      .sort((a, b) => {
+        // Sort by createdAt in descending order (newest first)
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA;
+      })
+      .filter((block) =>
+        (block.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+      );
   };
 
   const handleDeleteBlock = (blockId, isActive) => {
@@ -865,6 +907,69 @@ const ClientDetails = ({ route }) => {
       setPreviousBlocks(previousBlocks.filter((block) => block.id !== blockId));
     }
   };
+
+  const handleUpdateBlock = (updatedBlock) => {
+    setActiveBlocks(currentBlocks => 
+      currentBlocks.map(block => 
+        block.id === updatedBlock.id ? updatedBlock : block
+      )
+    );
+  };
+
+  const renderBlock = (block, isPrevious = false) => (
+    <TouchableOpacity
+      key={block.id}
+      style={[styles.blockCard, isPrevious && styles.previousBlock]}
+      onPress={() =>
+        navigation.navigate("WorkoutProgram", {
+          block,
+          onCloseBlock: () => {},
+          isPreviousBlock: isPrevious,
+          onReopenBlock: () => {},
+          isAthlete: false,
+          onUpdateBlock: handleUpdateBlock
+        })
+      }
+    >
+      <View style={styles.blockHeader}>
+        <View style={styles.blockTitleContainer}>
+          <Text style={styles.blockName}>{block.name}</Text>
+          <TouchableOpacity
+            style={styles.blockRenameButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleRenameBlock(block);
+            }}
+          >
+            <Icon name="pencil-outline" size={16} color="#666" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.blockActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteBlock(block.id, true);
+            }}
+          >
+            <Icon name="trash-outline" size={18} color="#FF3B30" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.duplicateButton}
+            onPress={() => handleDuplicateBlock(block)}
+          >
+            <Icon name="copy-outline" size={18} color="#4CAF50" />
+          </TouchableOpacity>
+          <View style={styles.statusBadge}>
+            <Icon name="radio-button-on" size={18} color="#4CAF50" />
+          </View>
+        </View>
+      </View>
+      <Text style={styles.dateText}>
+        {block.startDate} - {block.endDate}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -925,57 +1030,7 @@ const ClientDetails = ({ route }) => {
         <View style={styles.blocksSection}>
           <Text style={styles.sectionTitle}>Active Blocks</Text>
           {activeBlocks.length > 0 ? (
-            filterBlocks(activeBlocks).map((block) => (
-              <TouchableOpacity
-                key={block.id}
-                style={styles.blockCard}
-                onPress={() =>
-                  navigation.navigate("WorkoutProgram", {
-                    block,
-                    onCloseBlock: handleCloseBlock,
-                    isPreviousBlock: false,
-                  })
-                }
-              >
-                <View style={styles.blockHeader}>
-                  <View style={styles.blockTitleContainer}>
-                    <Text style={styles.blockName}>{block.name}</Text>
-                    <TouchableOpacity
-                      style={styles.blockRenameButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleRenameBlock(block);
-                      }}
-                    >
-                      <Icon name="pencil-outline" size={16} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.blockActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteBlock(block.id, true);
-                      }}
-                    >
-                      <Icon name="trash-outline" size={18} color="#FF3B30" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.duplicateButton}
-                      onPress={() => handleDuplicateBlock(block)}
-                    >
-                      <Icon name="copy-outline" size={18} color="#4CAF50" />
-                    </TouchableOpacity>
-                    <View style={styles.statusBadge}>
-                      <Icon name="radio-button-on" size={18} color="#4CAF50" />
-                    </View>
-                  </View>
-                </View>
-                <Text style={styles.dateText}>
-                  {block.startDate} - {block.endDate}
-                </Text>
-              </TouchableOpacity>
-            ))
+            filterBlocks(activeBlocks).map((block) => renderBlock(block))
           ) : (
             <View style={styles.noBlockContainer}>
               <Text style={styles.noBlockText}>No active training blocks</Text>
@@ -986,57 +1041,7 @@ const ClientDetails = ({ route }) => {
             Previous Blocks
           </Text>
           {previousBlocks.length > 0 ? (
-            filterBlocks(previousBlocks).map((block) => (
-              <TouchableOpacity
-                key={block.id}
-                style={styles.blockCard}
-                onPress={() =>
-                  navigation.navigate("WorkoutProgram", {
-                    block,
-                    onReopenBlock: handleReopenBlock,
-                    isPreviousBlock: true,
-                  })
-                }
-              >
-                <View style={styles.blockHeader}>
-                  <View style={styles.blockTitleContainer}>
-                    <Text style={styles.blockName}>{block.name}</Text>
-                    <TouchableOpacity
-                      style={styles.blockRenameButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleRenameBlock(block);
-                      }}
-                    >
-                      <Icon name="pencil-outline" size={16} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.blockActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteBlock(block.id, false);
-                      }}
-                    >
-                      <Icon name="trash-outline" size={18} color="#666" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.duplicateButton}
-                      onPress={() => handleDuplicateBlock(block)}
-                    >
-                      <Icon name="copy-outline" size={18} color="#666" />
-                    </TouchableOpacity>
-                    <View style={styles.statusBadge}>
-                      <Icon name="checkmark-circle" size={18} color="#666" />
-                    </View>
-                  </View>
-                </View>
-                <Text style={styles.dateText}>
-                  {block.startDate} - {block.endDate}
-                </Text>
-              </TouchableOpacity>
-            ))
+            filterBlocks(previousBlocks).map((block) => renderBlock(block, true))
           ) : (
             <View style={styles.noBlockContainer}>
               <Text style={styles.noBlockText}>
@@ -1308,6 +1313,9 @@ const styles = StyleSheet.create({
   actionButton: {
     padding: 4,
     marginRight: 8,
+  },
+  previousBlock: {
+    backgroundColor: "#f0f0f0",
   },
 });
 

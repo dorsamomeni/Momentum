@@ -10,10 +10,13 @@ import {
   Animated,
   PanResponder,
   Modal,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useSettings } from "../contexts/SettingsContext";
+import { doc, updateDoc, arrayUnion, arrayRemove, writeBatch } from "firebase/firestore";
+import { db } from "../src/config/firebase";
 
 const { width } = Dimensions.get("window");
 
@@ -57,6 +60,7 @@ const WorkoutProgram = ({ route }) => {
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(null);
   const [tempWeekName, setTempWeekName] = useState("");
   const weeksSliderRef = useRef(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleScroll = (event) => {
     if (isProgrammaticScroll) return;
@@ -307,6 +311,54 @@ const WorkoutProgram = ({ route }) => {
     setIsRenameModalVisible(false);
   };
 
+  const handleSubmitProgram = async () => {
+    if (isAthlete) return;
+    
+    try {
+      setIsSaving(true);
+      
+      // Update the block with current changes
+      const updatedBlock = {
+        ...block,
+        weeks: blockWeeks,
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Create batch write to ensure atomicity
+      const batch = writeBatch(db);
+
+      // Update athlete's document
+      const athleteRef = doc(db, "users", block.athleteId);
+      batch.update(athleteRef, {
+        activeBlocks: arrayRemove(block),
+        'activeBlocks': arrayUnion(updatedBlock)
+      });
+
+      // Update the block in blocks collection
+      const blockRef = doc(db, "blocks", block.id);
+      batch.set(blockRef, updatedBlock);
+
+      // Commit the batch
+      await batch.commit();
+
+      // Update local state in ClientDetails by calling the callback
+      if (route.params.onUpdateBlock) {
+        route.params.onUpdateBlock(updatedBlock);
+      }
+
+      Alert.alert(
+        "Success",
+        "Program has been updated and sent to athlete",
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      console.error("Error submitting program:", error);
+      Alert.alert("Error", "Failed to submit program");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -321,6 +373,18 @@ const WorkoutProgram = ({ route }) => {
           <View style={styles.titleContainer}>
             <Text style={styles.title}>{block.name}</Text>
           </View>
+
+          {!isAthlete && (
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSubmitProgram}
+              disabled={isSaving}
+            >
+              <Text style={styles.submitButtonText}>
+                {isSaving ? "Saving..." : "Submit"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.weekHeader}>
           <Text style={styles.subtitle}>
@@ -1003,6 +1067,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     letterSpacing: 0.3,
+  },
+  submitButton: {
+    position: 'absolute',
+    right: 0,
+    top: -10,
+    backgroundColor: '#000',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
