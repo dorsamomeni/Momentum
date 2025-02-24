@@ -75,9 +75,9 @@ const ClientRequests = () => {
       // Update coach document
       const coachRef = doc(db, "users", coachId);
       await updateDoc(coachRef, {
-        athletes: arrayUnion(athleteId),
         pendingRequests: arrayRemove(athleteId),
         sentRequests: arrayRemove(athleteId),
+        athletes: arrayUnion(athleteId),
         clientList: arrayUnion({
           athleteId: athleteId,
           dateAdded: new Date().toISOString(),
@@ -95,9 +95,7 @@ const ClientRequests = () => {
 
       // Remove request from local state
       setRequests(requests.filter((req) => req.id !== athleteId));
-      setOutgoingRequests(
-        outgoingRequests.filter((req) => req.id !== athleteId)
-      );
+      setOutgoingRequests(outgoingRequests.filter((req) => req.id !== athleteId));
 
       Alert.alert("Success", "Client request accepted");
       navigation.goBack();

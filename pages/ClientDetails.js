@@ -9,7 +9,7 @@ import {
   TextInput,
   Alert,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { auth, db } from "../src/config/firebase";
 import { writeBatch, doc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
@@ -708,35 +708,36 @@ const ClientDetails = ({ route }) => {
   const [tempBlockName, setTempBlockName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
-  useEffect(() => {
-    const loadBlocks = async () => {
-      try {
-        console.log("Loading blocks for athlete:", route.params.client.id);
-        const athleteRef = doc(db, "users", route.params.client.id);
-        const athleteDoc = await getDoc(athleteRef);
-        const athleteData = athleteDoc.data();
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadBlocks = async () => {
+        try {
+          console.log("Loading blocks for athlete:", route.params.client.id);
+          const athleteRef = doc(db, "users", route.params.client.id);
+          const athleteDoc = await getDoc(athleteRef);
+          const athleteData = athleteDoc.data();
 
-        console.log("Athlete data:", athleteData);
+          console.log("Athlete data:", athleteData);
 
-        if (athleteData) {
-          const blocks = athleteData.activeBlocks || [];
-          // Sort blocks by createdAt date
-          blocks.sort((a, b) => {
-            const dateA = new Date(a.createdAt || 0);
-            const dateB = new Date(b.createdAt || 0);
-            return dateB - dateA;
-          });
-          console.log("Setting active blocks:", blocks);
-          setActiveBlocks(blocks);
+          if (athleteData) {
+            const blocks = athleteData.activeBlocks || [];
+            blocks.sort((a, b) => {
+              const dateA = new Date(a.createdAt || 0);
+              const dateB = new Date(b.createdAt || 0);
+              return dateB - dateA;
+            });
+            console.log("Setting active blocks:", blocks);
+            setActiveBlocks(blocks);
+          }
+        } catch (error) {
+          console.error("Error loading blocks:", error);
+          Alert.alert("Error", "Failed to load training blocks");
         }
-      } catch (error) {
-        console.error("Error loading blocks:", error);
-        Alert.alert("Error", "Failed to load training blocks");
-      }
-    };
+      };
 
-    loadBlocks();
-  }, []);
+      loadBlocks();
+    }, [route.params.client.id])
+  );
 
   const handleNewBlock = async (blockName, sessionsPerWeek) => {
     try {
@@ -900,11 +901,41 @@ const ClientDetails = ({ route }) => {
       );
   };
 
-  const handleDeleteBlock = (blockId, isActive) => {
-    if (isActive) {
-      setActiveBlocks(activeBlocks.filter((block) => block.id !== blockId));
-    } else {
-      setPreviousBlocks(previousBlocks.filter((block) => block.id !== blockId));
+  const handleDeleteBlock = async (blockId, isActive) => {
+    try {
+      // Create batch write
+      const batch = writeBatch(db);
+
+      // Get references
+      const athleteRef = doc(db, "users", route.params.client.id);
+      const blockRef = doc(db, "blocks", blockId);
+
+      // Get current block to remove
+      const blockToRemove = activeBlocks.find(block => block.id === blockId);
+      
+      if (isActive) {
+        // Remove from athlete's active blocks
+        batch.update(athleteRef, {
+          activeBlocks: arrayRemove(blockToRemove)
+        });
+
+        // Delete from blocks collection
+        batch.delete(blockRef);
+
+        // Update local state
+        setActiveBlocks(activeBlocks.filter((block) => block.id !== blockId));
+      } else {
+        // Handle previous blocks if needed
+        setPreviousBlocks(previousBlocks.filter((block) => block.id !== blockId));
+      }
+
+      // Commit the batch
+      await batch.commit();
+      console.log("Block deleted successfully");
+
+    } catch (error) {
+      console.error("Error deleting block:", error);
+      Alert.alert("Error", "Failed to delete block");
     }
   };
 
