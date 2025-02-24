@@ -796,21 +796,11 @@ const ClientDetails = ({ route }) => {
       batch.set(blockRef, newBlock);
 
       await batch.commit();
-
       console.log("Block added successfully");
-      // Update local state with the new block
-      setActiveBlocks(currentBlocks => {
-        const updatedBlocks = [...currentBlocks, newBlock].sort((a, b) => {
-          const dateA = new Date(a.createdAt || 0);
-          const dateB = new Date(b.createdAt || 0);
-          return dateB - dateA;
-        });
-        console.log("Updated active blocks:", updatedBlocks);
-        return updatedBlocks;
-      });
+
     } catch (error) {
       console.error("Error creating block:", error);
-      Alert.alert("Error", "Failed to create block");
+      Alert.alert("Error", "Failed to create training block");
     }
   };
 
