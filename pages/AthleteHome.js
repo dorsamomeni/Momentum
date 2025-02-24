@@ -21,6 +21,7 @@ import {
   updateDoc,
   arrayRemove,
 } from "firebase/firestore";
+import { testFirebaseSetup } from "../src/services/FirebaseService";
 
 const AthleteHome = () => {
   const navigation = useNavigation();
@@ -32,36 +33,63 @@ const AthleteHome = () => {
   console.log("AthleteHome component rendering");
 
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadData = async () => {
       try {
         const user = auth.currentUser;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          const data = userDoc.data();
-          setUserData(data);
-          setActiveBlocks(data.activeBlocks || []);
-          setPreviousBlocks(data.previousBlocks || []);
+        if (!user) return;
 
-          // Fetch coach data if coachId exists
-          if (data.coachId) {
-            const coachDoc = await getDoc(doc(db, "users", data.coachId));
-            if (coachDoc.exists()) {
-              setCoachData({
-                id: data.coachId,
-                ...coachDoc.data(),
-              });
-            }
-          } else {
-            setCoachData(null); // Reset coach data if no coach is assigned
+        // Fetch user data
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const data = userDoc.data();
+        setUserData(data);
+
+        // Fetch active blocks - add doc.id to the data
+        const activeBlocksQuery = query(
+          collection(db, "blocks"),
+          where("athleteId", "==", user.uid),
+          where("status", "in", ["active", "submitted"]) // Include submitted blocks
+        );
+
+        const activeSnapshot = await getDocs(activeBlocksQuery);
+        const activeBlocksData = activeSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        console.log("Active blocks fetched:", activeBlocksData); // Debug log
+        setActiveBlocks(activeBlocksData);
+
+        // Fetch previous blocks
+        const previousBlocksQuery = query(
+          collection(db, "blocks"),
+          where("athleteId", "==", user.uid),
+          where("status", "==", "completed")
+        );
+
+        const previousSnapshot = await getDocs(previousBlocksQuery);
+        const previousBlocksData = previousSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setPreviousBlocks(previousBlocksData);
+
+        // Fetch coach data if exists
+        if (data?.coachId) {
+          const coachDoc = await getDoc(doc(db, "users", data.coachId));
+          if (coachDoc.exists()) {
+            setCoachData({
+              id: data.coachId,
+              ...coachDoc.data(),
+            });
           }
         }
       } catch (error) {
-        console.error("Error loading user data:", error);
+        console.error("Error loading data:", error);
+        Alert.alert("Error", "Failed to load programs");
       }
     };
 
-    loadUserData();
-  }, []);
+    loadData();
+  }, []); // Run once when component mounts
 
   const handleRemoveCoach = async () => {
     try {
@@ -99,6 +127,23 @@ const AthleteHome = () => {
     }
   };
 
+  const handleTestFirebase = async () => {
+    try {
+      const result = await testFirebaseSetup();
+      if (result) {
+        Alert.alert("Success", "Firebase setup is working correctly!");
+      } else {
+        Alert.alert(
+          "Error",
+          "Firebase setup test failed. Check console for details."
+        );
+      }
+    } catch (error) {
+      console.error("Test error:", error);
+      Alert.alert("Error", `Test failed: ${error.message}`);
+    }
+  };
+
   const renderBlock = (block, isPrevious = false) => (
     <TouchableOpacity
       key={block.id}
@@ -106,18 +151,28 @@ const AthleteHome = () => {
       onPress={() =>
         navigation.navigate("WorkoutProgram", {
           block,
-          onCloseBlock: () => {}, // Add close block functionality
+          onCloseBlock: () => {},
           isPreviousBlock: isPrevious,
-          onReopenBlock: () => {}, // Add reopen block functionality
+          onReopenBlock: () => {},
           isAthlete: true,
         })
       }
     >
-      <Text style={styles.blockName}>{block.name}</Text>
-      <View style={styles.blockDetails}>
-        <Text style={styles.blockDate}>
-          {block.startDate} - {block.endDate}
+      <View style={styles.blockHeader}>
+        <Text style={styles.blockName}>{block.name}</Text>
+        <Text style={styles.blockStatus}>
+          {block.status === "submitted" ? "New" : block.status}
         </Text>
+      </View>
+      <View style={styles.blockInfo}>
+        <Icon name="calendar-outline" size={16} color="#666" />
+        <Text style={styles.blockDate}>
+          {new Date(block.startDate).toLocaleDateString()} -{" "}
+          {new Date(block.endDate).toLocaleDateString()}
+        </Text>
+      </View>
+      <View style={styles.blockInfo}>
+        <Icon name="fitness-outline" size={16} color="#666" />
         <Text style={styles.sessionsPerWeek}>
           {block.sessionsPerWeek} sessions/week
         </Text>
@@ -193,19 +248,21 @@ const AthleteHome = () => {
       </View>
 
       <ScrollView style={styles.content}>
-        {activeBlocks.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Active Programs</Text>
-            {activeBlocks.map((block) => renderBlock(block))}
-          </View>
-        )}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Active Programs</Text>
+          {activeBlocks.length > 0 ? (
+            activeBlocks.map((block) => renderBlock(block))
+          ) : (
+            <Text style={styles.noBlocksText}>No active programs</Text>
+          )}
+        </View>
 
-        {previousBlocks.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Previous Programs</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Previous Programs</Text>
+          <View style={styles.blocksList}>
             {previousBlocks.map((block) => renderBlock(block, true))}
           </View>
-        )}
+        </View>
 
         {coachData &&
           activeBlocks.length === 0 &&
@@ -214,6 +271,15 @@ const AthleteHome = () => {
               <Text style={styles.emptyStateText}>No programs available</Text>
             </View>
           )}
+
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={handleTestFirebase}
+          >
+            <Text style={styles.testButtonText}>Test Firebase Setup</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );
@@ -260,21 +326,25 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   section: {
-    marginBottom: 24,
+    marginTop: 24,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: 16,
     color: "#000",
+  },
+  blocksList: {
+    gap: 12,
   },
   blockCard: {
     backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#eee",
+    borderColor: "#e0e0e0",
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -282,19 +352,36 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 3,
+    elevation: 2,
   },
   previousBlock: {
     opacity: 0.7,
+    backgroundColor: "#f8f8f8",
   },
-  blockName: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  blockDetails: {
+  blockHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  blockName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#000",
+  },
+  blockStatus: {
+    fontSize: 12,
+    color: "#666",
+    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  blockInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
   },
   blockDate: {
     fontSize: 14,
@@ -391,6 +478,23 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  testButton: {
+    backgroundColor: "#f0ad4e",
+    padding: 10,
+    borderRadius: 5,
+    marginVertical: 10,
+    alignSelf: "center",
+  },
+  testButtonText: {
+    color: "white",
+    fontWeight: "bold",
+  },
+  noBlocksText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 16,
   },
 });
 

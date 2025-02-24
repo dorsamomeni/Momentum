@@ -20,6 +20,7 @@ import { SettingsProvider } from "./contexts/SettingsContext";
 import AthleteTabs from "./navigation/AthleteTabs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import CoachRequests from "./pages/CoachRequests";
+import { ensureDatabaseSetup } from './src/services/FirebaseService';
 
 const slides = [
   {
@@ -51,6 +52,7 @@ export default function App() {
 
   useEffect(() => {
     checkOnboarding();
+    ensureDatabaseSetup().catch(console.error);
   }, []);
 
   const checkOnboarding = async () => {

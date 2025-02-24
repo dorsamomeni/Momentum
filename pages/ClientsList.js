@@ -4,13 +4,15 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   ScrollView,
+  Alert,
+  SafeAreaView,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useNavigation } from "@react-navigation/native";
 import { auth, db } from "../src/config/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayRemove } from "firebase/firestore";
+import { testFirebaseSetup } from "../src/services/FirebaseService";
 
 const ClientsList = () => {
   const navigation = useNavigation();
@@ -22,11 +24,9 @@ const ClientsList = () => {
         const coachId = auth.currentUser.uid;
         const coachDoc = await getDoc(doc(db, "users", coachId));
         const coachData = coachDoc.data();
-        
-        // Get the list of athlete IDs
+
         const athleteIds = coachData.athletes || [];
-        
-        // Fetch each athlete's details
+
         const athleteDetails = await Promise.all(
           athleteIds.map(async (athleteId) => {
             const athleteDoc = await getDoc(doc(db, "users", athleteId));
@@ -36,183 +36,252 @@ const ClientsList = () => {
             };
           })
         );
-        
+
         setClients(athleteDetails);
       } catch (error) {
         console.error("Error loading clients:", error);
+        Alert.alert("Error", "Failed to load clients");
       }
     };
 
     loadClients();
   }, []);
 
+  const handleRemoveClient = async (clientId) => {
+    try {
+      const coachId = auth.currentUser.uid;
+
+      // Update coach document
+      const coachRef = doc(db, "users", coachId);
+      await updateDoc(coachRef, {
+        athletes: arrayRemove(clientId),
+      });
+
+      // Update athlete document
+      const athleteRef = doc(db, "users", clientId);
+      await updateDoc(athleteRef, {
+        coachId: null,
+        status: "inactive",
+      });
+
+      // Update local state
+      setClients(clients.filter((client) => client.id !== clientId));
+      Alert.alert("Success", "Client removed successfully");
+    } catch (error) {
+      console.error("Error removing client:", error);
+      Alert.alert("Error", "Failed to remove client");
+    }
+  };
+
+  const handleTestFirebase = async () => {
+    try {
+      const result = await testFirebaseSetup();
+      if (result) {
+        Alert.alert("Success", "Firebase setup is working correctly!");
+      } else {
+        Alert.alert(
+          "Error",
+          "Firebase setup test failed. Check console for details."
+        );
+      }
+    } catch (error) {
+      console.error("Test error:", error);
+      Alert.alert("Error", `Test failed: ${error.message}`);
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Clients</Text>
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate("ClientRequests")}
-          >
-            <Icon name="add-circle" size={16} color="#000" />
-            <Text style={styles.buttonText}>Requests</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate("AddClient")}
-          >
-            <Icon name="people" size={16} color="#000" />
-            <Text style={styles.buttonText}>Add Client</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView style={styles.clientsList}>
-        {clients.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No clients yet</Text>
-          </View>
-        ) : (
-          clients.map((client) => (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Clients</Text>
+          <View style={styles.buttonContainer}>
+            {__DEV__ && (
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: "#f0ad4e" }]}
+                onPress={handleTestFirebase}
+              >
+                <Icon name="bug" size={16} color="#fff" />
+                <Text style={[styles.buttonText, { color: "#fff" }]}>
+                  Test Firebase
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              key={client.id}
-              style={styles.clientContainer}
-              onPress={() => navigation.navigate("ClientDetails", { client })}
+              style={styles.button}
+              onPress={() => navigation.navigate("ClientRequests")}
             >
-              <View style={styles.leftContainer}>
-                <View
-                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
-                >
-                  <Text style={styles.initial}>
-                    {client.firstName[0].toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.clientInfoContainer}>
-                  <Text style={styles.clientName}>
-                    {client.firstName} {client.lastName}
-                  </Text>
-                  <Text style={styles.username}>@{client.username}</Text>
-                </View>
-              </View>
+              <Icon name="notifications" size={16} color="#000" />
+              <Text style={styles.buttonText}>Requests</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => navigation.navigate("AddClient")}
+            >
+              <Icon name="person-add" size={16} color="#000" />
+              <Text style={styles.buttonText}>Add Client</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
-              <View style={styles.rightContainer}>
+        <ScrollView style={styles.clientsList}>
+          {clients.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No clients yet</Text>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => navigation.navigate("AddClient")}
+              >
+                <Text style={styles.addButtonText}>Add Your First Client</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            clients.map((client) => (
+              <TouchableOpacity
+                key={client.id}
+                style={styles.clientCard}
+                onPress={() => navigation.navigate("ClientDetails", { client })}
+              >
+                <View style={styles.clientInfo}>
+                  <View style={styles.profilePhoto}>
+                    <Text style={styles.initial}>
+                      {client.firstName[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.textContainer}>
+                    <Text style={styles.name}>
+                      {client.firstName} {client.lastName}
+                    </Text>
+                    <Text style={styles.username}>@{client.username}</Text>
+                  </View>
+                </View>
                 <TouchableOpacity
                   style={styles.removeButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    /* Logic to remove client */
+                  onPress={() => {
+                    Alert.alert(
+                      "Remove Client",
+                      "Are you sure you want to remove this client?",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Remove",
+                          onPress: () => handleRemoveClient(client.id),
+                          style: "destructive",
+                        },
+                      ]
+                    );
                   }}
                 >
-                  <Icon name="close" size={20} color="#666" />
+                  <Icon name="close" size={24} color="#000" />
                 </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
-    </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 40,
-    paddingTop: 140,
+    padding: 20,
+    marginTop: 50,
   },
   header: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 30,
+    alignItems: "center",
+    marginBottom: 20,
   },
   title: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: "bold",
   },
   buttonContainer: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   button: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f0f0f0",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    padding: 8,
     borderRadius: 8,
+    gap: 4,
   },
   buttonText: {
-    color: "#000",
     fontSize: 14,
-    marginLeft: 6,
-    fontWeight: "500",
   },
   clientsList: {
     flex: 1,
   },
-  clientContainer: {
+  clientCard: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: "#f8f8f8",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
   },
-  leftContainer: {
+  clientInfo: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
+    gap: 12,
   },
   profilePhoto: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: "center",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#A8E6CF",
     alignItems: "center",
+    justifyContent: "center",
   },
   initial: {
-    color: "#fff",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
-  },
-  clientInfoContainer: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: "600",
     color: "#000",
   },
-  rightContainer: {
-    marginLeft: 12,
+  textContainer: {
+    gap: 2,
   },
-  removeButton: {
-    width: 36,
-    height: 36,
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingTop: 40,
-  },
-  emptyStateText: {
+  name: {
     fontSize: 16,
-    color: "#666",
-    fontStyle: "italic",
+    fontWeight: "500",
   },
   username: {
     fontSize: 14,
     color: "#666",
-    marginTop: 4,
+  },
+  removeButton: {
+    padding: 8,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 100,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 20,
+  },
+  addButton: {
+    backgroundColor: "#A8E6CF",
+    padding: 12,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
   },
 });
 

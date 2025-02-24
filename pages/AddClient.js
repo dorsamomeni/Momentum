@@ -12,7 +12,13 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { collection, query, where, getDocs, getDoc } from "firebase/firestore";
-import { doc, updateDoc, arrayUnion } from "firebase/firestore";
+import {
+  doc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  writeBatch,
+} from "firebase/firestore";
 import { auth, db } from "../src/config/firebase";
 
 const AddClient = () => {
@@ -23,15 +29,11 @@ const AddClient = () => {
   const [isAthlete, setIsAthlete] = useState(false);
 
   useEffect(() => {
-    const checkUserRole = async () => {
-      const user = auth.currentUser;
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        const userData = userDoc.data();
-        setIsAthlete(userData.role === "athlete");
-      }
+    const checkRole = async () => {
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      setIsAthlete(userDoc.data()?.role === "athlete");
     };
-    checkUserRole();
+    checkRole();
   }, []);
 
   const searchUsers = async (searchTerm) => {
@@ -77,40 +79,78 @@ const AddClient = () => {
   const handleAddUser = async (userId) => {
     try {
       const currentUserId = auth.currentUser.uid;
+      const batch = writeBatch(db);
 
       if (isAthlete) {
         // Athlete sending request to coach
+        const athleteRef = doc(db, "users", currentUserId);
         const coachRef = doc(db, "users", userId);
-        await updateDoc(coachRef, {
+
+        batch.update(athleteRef, {
+          sentRequests: arrayUnion(userId),
+        });
+
+        batch.update(coachRef, {
           pendingRequests: arrayUnion(currentUserId),
         });
 
-        // Track sent request in athlete's document
-        const athleteRef = doc(db, "users", currentUserId);
-        await updateDoc(athleteRef, {
-          sentRequests: arrayUnion(userId),
-        });
-
-        Alert.alert("Success", "Friend request sent to coach");
+        await batch.commit();
+        Alert.alert("Success", "Request sent to coach");
       } else {
-        // Coach sending request to athlete
-        const athleteRef = doc(db, "users", userId);
-        await updateDoc(athleteRef, {
-          coachRequests: arrayUnion(currentUserId),
-        });
+        // Coach adding athlete (existing logic)
+        const blockId = `block_${Date.now()}`;
+        const initialBlock = {
+          id: blockId,
+          name: "Initial Program",
+          startDate: new Date().toISOString(),
+          endDate: new Date(
+            Date.now() + 28 * 24 * 60 * 60 * 1000
+          ).toISOString(),
+          status: "active",
+          sessionsPerWeek: 3,
+          weeks: [
+            {
+              weekNumber: 1,
+              exercises: Array(3)
+                .fill()
+                .map(() => ({
+                  day: 1,
+                  exercises: [],
+                })),
+            },
+          ],
+          coachId: currentUserId,
+          athleteId: userId,
+          createdAt: new Date().toISOString(),
+        };
 
-        // Track sent request in coach's document
         const coachRef = doc(db, "users", currentUserId);
-        await updateDoc(coachRef, {
-          sentRequests: arrayUnion(userId),
+        const athleteRef = doc(db, "users", userId);
+
+        batch.update(coachRef, {
+          athletes: arrayUnion(userId),
+          pendingRequests: arrayRemove(userId),
+          sentRequests: arrayRemove(userId),
         });
 
-        Alert.alert("Success", "Friend request sent to athlete");
+        batch.update(athleteRef, {
+          coachId: currentUserId,
+          status: "active",
+          sentRequests: arrayRemove(currentUserId),
+          activeBlocks: arrayUnion(blockId),
+        });
+
+        const blockRef = doc(db, "blocks", blockId);
+        batch.set(blockRef, initialBlock);
+
+        await batch.commit();
+        Alert.alert("Success", "Client added successfully");
       }
+
       navigation.goBack();
     } catch (error) {
       console.error("Error sending request:", error);
-      Alert.alert("Error", "Failed to send request");
+      Alert.alert("Error", "Failed to add client. Please try again.");
     }
   };
 

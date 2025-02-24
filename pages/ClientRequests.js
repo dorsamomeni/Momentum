@@ -16,6 +16,7 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from "firebase/firestore";
 
 const ClientRequests = () => {
@@ -71,27 +72,55 @@ const ClientRequests = () => {
   const handleAcceptRequest = async (athleteId) => {
     try {
       const coachId = auth.currentUser.uid;
+      const batch = writeBatch(db);
+
+      // Create initial empty block
+      const blockId = `block_${Date.now()}`;
+      const initialBlock = {
+        id: blockId,
+        name: "Initial Program",
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+        status: "active",
+        sessionsPerWeek: 3,
+        weeks: [
+          {
+            weekNumber: 1,
+            exercises: Array(3)
+              .fill()
+              .map(() => ({
+                day: 1,
+                exercises: [],
+              })),
+          },
+        ],
+        coachId: coachId,
+        athleteId: athleteId,
+        createdAt: new Date().toISOString(),
+      };
 
       // Update coach document
       const coachRef = doc(db, "users", coachId);
-      await updateDoc(coachRef, {
+      batch.update(coachRef, {
         athletes: arrayUnion(athleteId),
         pendingRequests: arrayRemove(athleteId),
         sentRequests: arrayRemove(athleteId),
-        clientList: arrayUnion({
-          athleteId: athleteId,
-          dateAdded: new Date().toISOString(),
-          status: "active",
-        }),
       });
 
       // Update athlete document
       const athleteRef = doc(db, "users", athleteId);
-      await updateDoc(athleteRef, {
+      batch.update(athleteRef, {
         coachId: coachId,
-        sentRequests: arrayRemove(coachId),
         status: "active",
+        sentRequests: arrayRemove(coachId),
+        activeBlocks: arrayUnion(blockId),
       });
+
+      // Create block document
+      const blockRef = doc(db, "blocks", blockId);
+      batch.set(blockRef, initialBlock);
+
+      await batch.commit();
 
       // Remove request from local state
       setRequests(requests.filter((req) => req.id !== athleteId));
@@ -103,19 +132,35 @@ const ClientRequests = () => {
       navigation.goBack();
     } catch (error) {
       console.error("Error accepting request:", error);
-      Alert.alert("Error", "Failed to accept request");
+      Alert.alert("Error", "Failed to accept request. Please try again.");
     }
   };
 
   const handleRejectRequest = async (athleteId) => {
     try {
-      const coachRef = doc(db, "users", auth.currentUser.uid);
-      await updateDoc(coachRef, {
+      const batch = writeBatch(db);
+      const coachId = auth.currentUser.uid;
+
+      // Update coach document
+      const coachRef = doc(db, "users", coachId);
+      batch.update(coachRef, {
         pendingRequests: arrayRemove(athleteId),
+        sentRequests: arrayRemove(athleteId),
       });
+
+      // Update athlete document
+      const athleteRef = doc(db, "users", athleteId);
+      batch.update(athleteRef, {
+        sentRequests: arrayRemove(coachId),
+      });
+
+      await batch.commit();
 
       // Remove request from local state
       setRequests(requests.filter((req) => req.id !== athleteId));
+      setOutgoingRequests(
+        outgoingRequests.filter((req) => req.id !== athleteId)
+      );
 
       Alert.alert("Success", "Request rejected");
     } catch (error) {

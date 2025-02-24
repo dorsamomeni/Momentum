@@ -14,37 +14,103 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useSettings } from "../contexts/SettingsContext";
+import { Alert } from "react-native";
+import { updateBlock } from "../src/services/ProgramService";
+import { logWorkoutSet } from "../src/services/workouts";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../src/config/firebase";
 
 const { width } = Dimensions.get("window");
 
 const WorkoutProgram = ({ route }) => {
   const navigation = useNavigation();
-  const { block, onCloseBlock, isPreviousBlock, onReopenBlock, isAthlete } = route.params;
-  const { weightUnit } = useSettings();
+  const { block, onCloseBlock, isPreviousBlock, onReopenBlock, isAthlete } =
+    route.params;
+  const { weightUnit, setWeightUnit } = useSettings();
   const days = Array(block.sessionsPerWeek).fill(null);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [totalWeeks, setTotalWeeks] = useState(block.weeks?.length || 1);
-  const [blockWeeks, setBlockWeeks] = useState(
-    block.weeks || [
+  const [currentDay, setCurrentDay] = useState(1);
+  const [blockWeeks, setBlockWeeks] = useState(() => {
+    if (block.weeks && block.weeks.length > 0) {
+      return block.weeks;
+    }
+
+    return [
       {
-        exercises: Array(block.sessionsPerWeek).fill({
-          exercises: [
-            {
-              name: "",
-              sets: [
-                {
-                  scheme: "",
-                  weight: "",
-                  setCount: "1",
-                },
-              ],
-              notes: "",
-            },
-          ],
-        }),
+        weekNumber: 1,
+        days: Array(block.sessionsPerWeek)
+          .fill()
+          .map((_, dayIndex) => ({
+            dayNumber: dayIndex + 1,
+            exercises: [],
+          })),
       },
-    ]
-  );
+    ];
+  });
+
+  const handleSubmitSession = async () => {
+    try {
+      const currentDayExercises =
+        blockWeeks[currentWeek - 1]?.days[currentDay - 1]?.exercises || [];
+
+      for (const exercise of currentDayExercises) {
+        if (exercise.name && exercise.sets) {
+          for (const set of exercise.sets) {
+            if (set.weight) {
+              await logWorkoutSet(block.athleteId, {
+                name: exercise.name,
+                weight: set.weight,
+                scheme: set.scheme,
+                blockId: block.id,
+                weekNumber: currentWeek,
+                dayNumber: currentDay,
+                notes: exercise.notes || "",
+                reps: set.reps,
+                sets: set.setCount,
+              });
+            }
+          }
+        }
+      }
+      Alert.alert("Success", "Session logged successfully", [
+        { text: "OK", onPress: () => navigation.goBack() },
+      ]);
+    } catch (error) {
+      console.error("Error logging session:", error);
+      Alert.alert("Error", "Failed to log session");
+    }
+  };
+
+  const handleSubmitProgram = async () => {
+    try {
+      if (!blockWeeks) {
+        throw new Error("No program data to submit");
+      }
+
+      const formattedWeeks = blockWeeks.map((week, weekIndex) => ({
+        weekNumber: weekIndex + 1,
+        days: week.days.map((day, dayIndex) => ({
+          dayNumber: dayIndex + 1,
+          exercises: day.exercises || [],
+        })),
+      }));
+
+      const updateData = {
+        weeks: formattedWeeks,
+        status: "submitted",
+        updatedAt: new Date().toISOString(),
+      };
+
+      await updateBlock(block.id, updateData);
+      Alert.alert("Success", "Program submitted successfully", [
+        { text: "OK", onPress: () => navigation.goBack() },
+      ]);
+    } catch (error) {
+      console.error("Error submitting program:", error);
+      Alert.alert("Error", "Failed to submit program");
+    }
+  };
   const weeks = Array(totalWeeks).fill(null);
   const scrollViewRef = useRef(null);
   const [isProgrammaticScroll, setIsProgrammaticScroll] = useState(false);
@@ -67,21 +133,13 @@ const WorkoutProgram = ({ route }) => {
 
   const handleAddWeek = () => {
     const newWeek = {
-      exercises: Array(block.sessionsPerWeek).fill({
-        exercises: [
-          {
-            name: "",
-            sets: [
-              {
-                scheme: "",
-                weight: "",
-                setCount: "1",
-              },
-            ],
-            notes: "",
-          },
-        ],
-      }),
+      weekNumber: totalWeeks + 1,
+      days: Array(block.sessionsPerWeek)
+        .fill()
+        .map((_, dayIndex) => ({
+          dayNumber: dayIndex + 1,
+          exercises: [],
+        })),
     };
 
     const newTotalWeeks = totalWeeks + 1;
@@ -89,27 +147,22 @@ const WorkoutProgram = ({ route }) => {
 
     setIsProgrammaticScroll(true);
 
-    // Update all states at once before animations
     setBlockWeeks([...blockWeeks, newWeek]);
     setTotalWeeks(newTotalWeeks);
     setWeekNames([...weekNames, newWeekName]);
 
-    // Wait for state updates to process
     requestAnimationFrame(() => {
-      // Set current week and trigger both scrolls simultaneously
       setCurrentWeek(newTotalWeeks);
 
-      // Perform both scroll animations together
       scrollViewRef.current?.scrollTo({
         x: (newTotalWeeks - 1) * width,
         animated: true,
       });
       weeksSliderRef.current?.scrollToEnd({
         animated: true,
-        duration: 300, // Match the default React Native scroll animation duration
+        duration: 300,
       });
 
-      // Reset programmatic scroll flag after animations complete
       setTimeout(() => {
         setIsProgrammaticScroll(false);
       }, 300);
@@ -117,13 +170,23 @@ const WorkoutProgram = ({ route }) => {
   };
 
   const handleCopyWeek = () => {
-    const weekToCopy = JSON.parse(JSON.stringify(blockWeeks[currentWeek - 1]));
+    // Deep copy the current week with the correct structure
+    const weekToCopy = {
+      weekNumber: totalWeeks + 1,
+      days: JSON.parse(JSON.stringify(blockWeeks[currentWeek - 1].days)).map(
+        (day, index) => ({
+          dayNumber: index + 1,
+          exercises: day.exercises || [],
+        })
+      ),
+    };
+
     const newTotalWeeks = totalWeeks + 1;
     const newWeekName = `Week ${newTotalWeeks}`;
 
     setIsProgrammaticScroll(true);
 
-    // Update all states at once before animations
+    // Update blockWeeks with the new week
     setBlockWeeks([...blockWeeks, weekToCopy]);
     setTotalWeeks(newTotalWeeks);
     setWeekNames([...weekNames, newWeekName]);
@@ -131,7 +194,6 @@ const WorkoutProgram = ({ route }) => {
     requestAnimationFrame(() => {
       setCurrentWeek(newTotalWeeks);
 
-      // Perform both scroll animations together
       scrollViewRef.current?.scrollTo({
         x: (newTotalWeeks - 1) * width,
         animated: true,
@@ -149,14 +211,17 @@ const WorkoutProgram = ({ route }) => {
 
   const handleDeleteWeek = () => {
     if (totalWeeks > 1) {
-      // Remove the current week from blockWeeks
-      const updatedWeeks = [...blockWeeks];
-      updatedWeeks.splice(currentWeek - 1, 1);
+      const updatedWeeks = blockWeeks
+        .filter((_, index) => index !== currentWeek - 1)
+        .map((week, index) => ({
+          ...week,
+          weekNumber: index + 1,
+        }));
+
       setBlockWeeks(updatedWeeks);
-
       setTotalWeeks(totalWeeks - 1);
+      setWeekNames(weekNames.filter((_, index) => index !== currentWeek - 1));
 
-      // If deleting last week, move to previous week
       if (currentWeek === totalWeeks) {
         setCurrentWeek(currentWeek - 1);
         scrollViewRef.current?.scrollTo({
@@ -164,7 +229,6 @@ const WorkoutProgram = ({ route }) => {
           animated: true,
         });
       } else {
-        // Stay on same position but update week number since current week was deleted
         setCurrentWeek(currentWeek);
         scrollViewRef.current?.scrollTo({
           x: (currentWeek - 1) * width,
@@ -175,16 +239,12 @@ const WorkoutProgram = ({ route }) => {
   };
 
   const handleReopenBlock = () => {
-    // Call the callback to update the parent state
     onReopenBlock(block);
-    // Navigate back to the client details screen
     navigation.goBack();
   };
 
   const handleCloseBlock = () => {
-    // Call the callback to update the parent state
     onCloseBlock(block);
-    // Navigate back to the client details screen
     navigation.goBack();
   };
 
@@ -202,17 +262,17 @@ const WorkoutProgram = ({ route }) => {
     };
 
     const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
-    if (!updatedWeeks[weekIndex].exercises[dayIndex].exercises) {
-      updatedWeeks[weekIndex].exercises[dayIndex].exercises = [];
+    if (!updatedWeeks[weekIndex].days[dayIndex].exercises) {
+      updatedWeeks[weekIndex].days[dayIndex].exercises = [];
     }
-    updatedWeeks[weekIndex].exercises[dayIndex].exercises.push(newExercise);
+    updatedWeeks[weekIndex].days[dayIndex].exercises.push(newExercise);
     setBlockWeeks(updatedWeeks);
   };
 
   const handleAddSet = (weekIndex, dayIndex, exerciseIndex) => {
     const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
     const exercise =
-      updatedWeeks[weekIndex].exercises[dayIndex].exercises[exerciseIndex];
+      updatedWeeks[weekIndex].days[dayIndex].exercises[exerciseIndex];
 
     if (!exercise.sets) {
       exercise.sets = [];
@@ -221,6 +281,7 @@ const WorkoutProgram = ({ route }) => {
     exercise.sets.push({
       scheme: "",
       weight: "",
+      setCount: "1",
     });
 
     setBlockWeeks(updatedWeeks);
@@ -249,6 +310,7 @@ const WorkoutProgram = ({ route }) => {
                   style={styles.schemeInput}
                   defaultValue={set.scheme}
                   placeholder="Sets x Reps @ RPE"
+                  editable={!isAthlete}
                 />
               </View>
 
@@ -258,6 +320,7 @@ const WorkoutProgram = ({ route }) => {
                   defaultValue={set.weight}
                   keyboardType="numeric"
                   placeholder="0"
+                  editable={isAthlete && !isPreviousBlock}
                 />
                 <TouchableOpacity
                   style={styles.weightUnitButton}
@@ -271,12 +334,14 @@ const WorkoutProgram = ({ route }) => {
             </View>
           ))}
 
-          <TouchableOpacity
-            style={styles.addSetButton}
-            onPress={() => handleAddSet(weekIndex, dayIndex, index)}
-          >
-            <Text style={styles.addSetButtonText}>+ Add Set</Text>
-          </TouchableOpacity>
+          {!isAthlete && (
+            <TouchableOpacity
+              style={styles.addSetButton}
+              onPress={() => handleAddSet(weekIndex, dayIndex, index)}
+            >
+              <Text style={styles.addSetButtonText}>+ Add Set</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.noteContainer}>
             <Text style={styles.noteLabel}>Notes:</Text>
@@ -285,26 +350,12 @@ const WorkoutProgram = ({ route }) => {
               defaultValue={exercise.notes}
               placeholder="Add notes here"
               multiline
+              editable={!isAthlete}
             />
           </View>
         </View>
       </View>
     );
-  };
-
-  const handleRenameWeek = (index) => {
-    setSelectedWeekIndex(index);
-    setTempWeekName(weekNames[index]);
-    setIsRenameModalVisible(true);
-  };
-
-  const saveWeekName = () => {
-    if (selectedWeekIndex !== null && tempWeekName.trim()) {
-      const newWeekNames = [...weekNames];
-      newWeekNames[selectedWeekIndex] = tempWeekName.trim();
-      setWeekNames(newWeekNames);
-    }
-    setIsRenameModalVisible(false);
   };
 
   return (
@@ -326,6 +377,25 @@ const WorkoutProgram = ({ route }) => {
           <Text style={styles.subtitle}>
             {block.startDate} - {block.endDate}
           </Text>
+          {isAthlete ? (
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                isPreviousBlock && styles.submitButtonDisabled,
+              ]}
+              onPress={handleSubmitSession}
+              disabled={isPreviousBlock}
+            >
+              <Text style={styles.submitButtonText}>Submit Session</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSubmitProgram}
+            >
+              <Text style={styles.submitButtonText}>Submit Program</Text>
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.actionsContainer}>
           <TouchableOpacity
@@ -388,112 +458,51 @@ const WorkoutProgram = ({ route }) => {
             key={weekIndex}
             style={[styles.programContainer, { width }]}
           >
-            {blockWeeks
-              ? // For existing blocks with data
-                blockWeeks[weekIndex].exercises.map((day, dayIndex) => (
-                  <View
-                    key={dayIndex}
-                    style={[
-                      styles.daySection,
-                      dayIndex === 0 && styles.firstDaySection,
-                    ]}
-                  >
-                    <View style={styles.dayHeader}>
-                      <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
-                      {!isAthlete && (
-                        <TouchableOpacity
-                          style={styles.addExerciseButton}
-                          onPress={() => handleAddExercise(weekIndex, dayIndex)}
-                        >
-                          <Text style={styles.addExerciseIcon}>+</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <View style={styles.exercisesContainer}>
-                      {day.exercises.map((exercise, index) => (
-                        <ExerciseItem
-                          key={index}
-                          exercise={exercise}
-                          index={index}
-                          weekIndex={weekIndex}
-                          dayIndex={dayIndex}
-                        />
-                      ))}
-                    </View>
-                    {!isAthlete && (
-                      <TouchableOpacity
-                        style={styles.bottomAddExerciseButton}
-                        onPress={() => handleAddExercise(weekIndex, dayIndex)}
-                      >
-                        <View style={styles.bottomAddExerciseContent}>
-                          <Icon name="add-outline" size={20} color="#666" />
-                          <Text style={styles.bottomAddExerciseText}>
-                            Add Exercise
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))
-              : // For new blocks without data
-                Array(block.sessionsPerWeek)
-                  .fill(null)
-                  .map((_, dayIndex) => (
-                    <View
-                      key={dayIndex}
-                      style={[
-                        styles.daySection,
-                        dayIndex === 0 && styles.firstDaySection,
-                      ]}
+            {blockWeeks[weekIndex]?.days.map((day, dayIndex) => (
+              <View
+                key={dayIndex}
+                style={[
+                  styles.daySection,
+                  dayIndex === 0 && styles.firstDaySection,
+                ]}
+              >
+                <View style={styles.dayHeader}>
+                  <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
+                  {!isAthlete && (
+                    <TouchableOpacity
+                      style={styles.addExerciseButton}
+                      onPress={() => handleAddExercise(weekIndex, dayIndex)}
                     >
-                      <View style={styles.dayHeader}>
-                        <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
-                        {!isAthlete && (
-                          <TouchableOpacity
-                            style={styles.addExerciseButton}
-                            onPress={() =>
-                              handleAddExercise(currentWeek - 1, dayIndex)
-                            }
-                          >
-                            <Text style={styles.addExerciseIcon}>+</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      <View style={styles.exercisesContainer}>
-                        <ExerciseItem
-                          exercise={{
-                            name: "",
-                            sets: [
-                              {
-                                scheme: "",
-                                weight: "0",
-                                setCount: "1",
-                              },
-                            ],
-                            notes: "",
-                          }}
-                          index={0}
-                          weekIndex={currentWeek - 1}
-                          dayIndex={dayIndex}
-                        />
-                      </View>
-                      {!isAthlete && (
-                        <TouchableOpacity
-                          style={styles.bottomAddExerciseButton}
-                          onPress={() =>
-                            handleAddExercise(currentWeek - 1, dayIndex)
-                          }
-                        >
-                          <View style={styles.bottomAddExerciseContent}>
-                            <Icon name="add-outline" size={20} color="#666" />
-                            <Text style={styles.bottomAddExerciseText}>
-                              Add Exercise
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                      <Text style={styles.addExerciseIcon}>+</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View style={styles.exercisesContainer}>
+                  {(day.exercises || []).map((exercise, index) => (
+                    <ExerciseItem
+                      key={index}
+                      exercise={exercise}
+                      index={index}
+                      weekIndex={weekIndex}
+                      dayIndex={dayIndex}
+                    />
                   ))}
+                </View>
+                {!isAthlete && (
+                  <TouchableOpacity
+                    style={styles.bottomAddExerciseButton}
+                    onPress={() => handleAddExercise(weekIndex, dayIndex)}
+                  >
+                    <View style={styles.bottomAddExerciseContent}>
+                      <Icon name="add-outline" size={20} color="#666" />
+                      <Text style={styles.bottomAddExerciseText}>
+                        Add Exercise
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
           </ScrollView>
         ))}
       </ScrollView>
@@ -541,7 +550,11 @@ const WorkoutProgram = ({ route }) => {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.renameButton}
-                    onPress={() => handleRenameWeek(index)}
+                    onPress={() => {
+                      setSelectedWeekIndex(index);
+                      setTempWeekName(weekNames[index]);
+                      setIsRenameModalVisible(true);
+                    }}
                   >
                     <Icon name="pencil-outline" size={14} color="#666" />
                   </TouchableOpacity>
@@ -582,7 +595,14 @@ const WorkoutProgram = ({ route }) => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.saveButton]}
-                onPress={saveWeekName}
+                onPress={() => {
+                  if (selectedWeekIndex !== null && tempWeekName.trim()) {
+                    const newWeekNames = [...weekNames];
+                    newWeekNames[selectedWeekIndex] = tempWeekName.trim();
+                    setWeekNames(newWeekNames);
+                  }
+                  setIsRenameModalVisible(false);
+                }}
               >
                 <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
@@ -1003,6 +1023,50 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     letterSpacing: 0.3,
+  },
+  exerciseContainer: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  exerciseName: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  schemeContainer: {
+    marginVertical: 4,
+  },
+  schemeText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 4,
+    padding: 8,
+    marginVertical: 4,
+  },
+  addButton: {
+    backgroundColor: "#f0f0f0",
+    padding: 8,
+    borderRadius: 4,
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  notes: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
+  },
+  loggedWeight: {
+    fontSize: 14,
+    color: "#4CAF50",
+    marginTop: 2,
   },
 });
 
