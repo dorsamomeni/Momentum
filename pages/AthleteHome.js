@@ -28,6 +28,7 @@ const AthleteHome = () => {
   const [previousBlocks, setPreviousBlocks] = useState([]);
   const [userData, setUserData] = useState(null);
   const [coachData, setCoachData] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   console.log("AthleteHome component rendering");
 
@@ -125,6 +126,12 @@ const AthleteHome = () => {
     </TouchableOpacity>
   );
 
+  const filterBlocks = (blocks) => {
+    return blocks.filter((block) =>
+      block.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -192,18 +199,38 @@ const AthleteHome = () => {
         )}
       </View>
 
+      <View style={styles.searchRow}>
+        <View style={styles.searchContainer}>
+          <Icon
+            name="search"
+            size={20}
+            color="#999"
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search programs..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
+          />
+        </View>
+      </View>
+
       <ScrollView style={styles.content}>
         {activeBlocks.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Active Programs</Text>
-            {activeBlocks.map((block) => renderBlock(block))}
+            {filterBlocks(activeBlocks).map((block) => renderBlock(block))}
           </View>
         )}
 
         {previousBlocks.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Previous Programs</Text>
-            {previousBlocks.map((block) => renderBlock(block, true))}
+            {filterBlocks(previousBlocks).map((block) =>
+              renderBlock(block, true)
+            )}
           </View>
         )}
 
@@ -391,6 +418,35 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  searchRow: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    height: 44,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+    height: "100%",
   },
 });
 
