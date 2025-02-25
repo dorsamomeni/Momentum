@@ -15,6 +15,7 @@ import { LogBox } from "react-native";
 import ClientRequests from "../pages/ClientRequests";
 import AddClient from "../pages/AddClient";
 import UserProfile from "../pages/UserProfile";
+import FindCoach from "../pages/FindCoach";
 
 // Ignore specific yellow box warnings
 LogBox.ignoreLogs(["Warning: ..."]); // Replace ... with the specific warning text
@@ -52,6 +53,7 @@ const MainStack = () => {
       <Stack.Screen name="ClientRequests" component={ClientRequests} />
       <Stack.Screen name="AddClient" component={AddClient} />
       <Stack.Screen name="UserProfile" component={UserProfile} />
+      <Stack.Screen name="FindCoach" component={FindCoach} />
     </Stack.Navigator>
   );
 };

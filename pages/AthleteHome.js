@@ -21,6 +21,7 @@ import {
   updateDoc,
   arrayRemove,
 } from "firebase/firestore";
+import FindCoach from "../pages/FindCoach";
 
 const AthleteHome = () => {
   const navigation = useNavigation();
@@ -191,9 +192,9 @@ const AthleteHome = () => {
             </Text>
             <TouchableOpacity
               style={styles.addCoachButton}
-              onPress={() => navigation.navigate("AddClient")}
+              onPress={() => navigation.navigate("FindCoach")}
             >
-              <Text style={styles.addCoachButtonText}>Add</Text>
+              <Text style={styles.addCoachButtonText}>Find Coach</Text>
             </TouchableOpacity>
           </View>
         )}

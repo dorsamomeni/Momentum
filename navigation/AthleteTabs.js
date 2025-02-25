@@ -6,10 +6,12 @@ import AthleteHome from "../pages/AthleteHome";
 import WorkoutProgram from "../pages/WorkoutProgram";
 import AthleteStats from "../pages/AthleteStats";
 import ClientsSettings from "../pages/ClientsSettings";
+import FindCoach from "../pages/FindCoach";
 import { TouchableOpacity, StyleSheet } from "react-native";
 import { auth, db } from "../src/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { LogBox } from "react-native";
+import CustomTabBarButton from "../components/CustomTabBarButton";
 
 // Ignore specific yellow box warnings
 LogBox.ignoreLogs(["Warning: ..."]);
@@ -18,16 +20,10 @@ LogBox.ignoreAllLogs();
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const CustomTabBarButton = ({ children, onPress }) => (
-  <TouchableOpacity style={styles.tabButton} onPress={onPress}>
-    {children}
-  </TouchableOpacity>
-);
-
 const AthleteStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="MainList" component={AthleteHome} />
+      <Stack.Screen name="AthleteHome" component={AthleteHome} />
       <Stack.Screen name="WorkoutProgram" component={WorkoutProgram} />
     </Stack.Navigator>
   );
@@ -48,22 +44,24 @@ const AthleteTabs = () => {
         options={{
           tabBarButton: (props) => (
             <CustomTabBarButton {...props}>
-              <Icon name="users" size={24} color="#000" />
+              <Icon name="home" size={24} color="#000" />
             </CustomTabBarButton>
           ),
         }}
       />
+
       <Tab.Screen
         name="Stats"
         component={AthleteStats}
         options={{
           tabBarButton: (props) => (
             <CustomTabBarButton {...props}>
-              <Icon name="bar-chart" size={24} color="#000" />
+              <Icon name="bar-chart-o" size={24} color="#000" />
             </CustomTabBarButton>
           ),
         }}
       />
+      
       <Tab.Screen
         name="Settings"
         component={ClientsSettings}

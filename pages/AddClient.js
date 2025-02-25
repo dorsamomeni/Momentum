@@ -5,9 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Image,
   ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -17,9 +17,8 @@ import { auth, db } from "../src/config/firebase";
 
 const AddClient = () => {
   const navigation = useNavigation();
-  const [username, setUsername] = React.useState("");
+  const [username, setUsername] = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
   const [isAthlete, setIsAthlete] = useState(false);
 
   useEffect(() => {
@@ -35,15 +34,17 @@ const AddClient = () => {
   }, []);
 
   const searchUsers = async (searchTerm) => {
-    if (!searchTerm.trim()) return;
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
 
-    setSearching(true);
     try {
       const q = query(
         collection(db, "users"),
         where("role", "==", isAthlete ? "coach" : "athlete"),
-        where("username", ">=", searchTerm),
-        where("username", "<=", searchTerm + "\uf8ff")
+        where("username", ">=", searchTerm.toLowerCase()),
+        where("username", "<=", searchTerm.toLowerCase() + "\uf8ff")
       );
 
       const querySnapshot = await getDocs(q);
@@ -69,8 +70,6 @@ const AddClient = () => {
     } catch (error) {
       console.error("Error searching users:", error);
       Alert.alert("Error", "Failed to search users");
-    } finally {
-      setSearching(false);
     }
   };
 
@@ -85,13 +84,12 @@ const AddClient = () => {
           pendingRequests: arrayUnion(currentUserId),
         });
 
-        // Track sent request in athlete's document
         const athleteRef = doc(db, "users", currentUserId);
         await updateDoc(athleteRef, {
           sentRequests: arrayUnion(userId),
         });
 
-        Alert.alert("Success", "Friend request sent to coach");
+        Alert.alert("Success", "Request sent to coach");
       } else {
         // Coach sending request to athlete
         const athleteRef = doc(db, "users", userId);
@@ -99,24 +97,17 @@ const AddClient = () => {
           coachRequests: arrayUnion(currentUserId),
         });
 
-        // Track sent request in coach's document
         const coachRef = doc(db, "users", currentUserId);
         await updateDoc(coachRef, {
           sentRequests: arrayUnion(userId),
         });
 
-        Alert.alert("Success", "Friend request sent to athlete");
+        Alert.alert("Success", "Request sent to athlete");
       }
       navigation.goBack();
     } catch (error) {
       console.error("Error sending request:", error);
       Alert.alert("Error", "Failed to send request");
-    }
-  };
-
-  const handleSearch = () => {
-    if (username.trim()) {
-      navigation.navigate("UserProfile", { username: username.trim() });
     }
   };
 
@@ -130,49 +121,63 @@ const AddClient = () => {
       </TouchableOpacity>
       <Text style={styles.title}>{isAthlete ? "Add Coach" : "Add Client"}</Text>
 
-      <Image
-        source={require("../assets/logo.png")}
-        style={styles.logo}
-        resizeMode="contain"
-      />
-
-      <View style={styles.searchContainer}>
-        <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={`Search ${
-            isAthlete ? "coaches" : "athletes"
-          } by username`}
-          placeholderTextColor="#666"
-          autoCapitalize="none"
-          value={username}
-          onChangeText={(text) => {
-            setUsername(text);
-            searchUsers(text);
-          }}
-          onSubmitEditing={() => {}}
-          returnKeyType="search"
+      <View style={styles.content}>
+        <Image
+          source={require("../assets/logo.png")}
+          style={styles.logo}
+          resizeMode="contain"
         />
-      </View>
 
-      <ScrollView style={styles.resultsContainer}>
-        {searchResults.map((user) => (
-          <View key={user.id} style={styles.athleteCard}>
-            <View style={styles.userInfo}>
-              <Text style={styles.athleteName}>
-                {user.firstName} {user.lastName}
-              </Text>
-              <Text style={styles.athleteUsername}>@{user.username}</Text>
+        <View style={styles.searchContainer}>
+          <Icon
+            name="search"
+            size={20}
+            color="#666"
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search ${
+              isAthlete ? "coaches" : "athletes"
+            } by username`}
+            value={username}
+            onChangeText={(text) => {
+              setUsername(text);
+              searchUsers(text);
+            }}
+            placeholderTextColor="#666"
+            autoCapitalize="none"
+          />
+        </View>
+
+        <ScrollView style={styles.resultsContainer}>
+          {searchResults.map((user) => (
+            <View key={user.id} style={styles.userCard}>
+              <View style={styles.userInfo}>
+                <View
+                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                >
+                  <Text style={styles.initial}>
+                    {user.firstName[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.userDetails}>
+                  <Text style={styles.userName}>
+                    {user.firstName} {user.lastName}
+                  </Text>
+                  <Text style={styles.username}>@{user.username}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => handleAddUser(user.id)}
+              >
+                <Text style={styles.addButtonText}>Request</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => handleAddUser(user.id)}
-            >
-              <Icon name="add-circle-outline" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </ScrollView>
+          ))}
+        </ScrollView>
+      </View>
     </View>
   );
 };
@@ -181,31 +186,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 40,
-    paddingTop: 140,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: "bold",
-    marginBottom: 60,
+    padding: 20,
+    paddingTop: 60,
   },
   backButton: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    zIndex: 1,
+    marginBottom: 20,
   },
   backButtonText: {
     fontSize: 28,
     color: "#000",
   },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 20,
+  },
+  content: {
+    flex: 1,
+    paddingTop: 20,
+  },
   logo: {
-    width: 180,
-    height: 180,
-    marginBottom: 0,
-    marginTop: 40,
+    width: 150,
+    height: 150,
     alignSelf: "center",
-    marginLeft: 10,
+    marginBottom: 30,
+    marginTop: 100,
+    marginBottom: -15,
   },
   searchContainer: {
     flexDirection: "row",
@@ -214,9 +220,8 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     paddingHorizontal: 20,
     marginBottom: 20,
-    marginTop: 0,
-    width: "100%",
-    alignSelf: "center",
+    marginHorizontal: 20,
+    height: 50,
   },
   searchIcon: {
     marginRight: 10,
@@ -230,27 +235,55 @@ const styles = StyleSheet.create({
   resultsContainer: {
     flex: 1,
   },
-  athleteCard: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
+  userCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    padding: 15,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#eee",
   },
   userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
-  athleteName: {
-    fontSize: 18,
+  profilePhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  initial: {
+    color: "#fff",
+    fontSize: 20,
     fontWeight: "bold",
   },
-  athleteUsername: {
+  userDetails: {
+    marginLeft: 15,
+  },
+  userName: {
     fontSize: 16,
+    fontWeight: "600",
+  },
+  username: {
+    fontSize: 14,
     color: "#666",
   },
   addButton: {
-    padding: 8,
+    backgroundColor: "#000",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 

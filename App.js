@@ -20,6 +20,7 @@ import { SettingsProvider } from "./contexts/SettingsContext";
 import AthleteTabs from "./navigation/AthleteTabs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import CoachRequests from "./pages/CoachRequests";
+import FindCoach from "./pages/FindCoach";
 
 const slides = [
   {
@@ -151,6 +152,7 @@ export default function App() {
               <Stack.Screen name="WorkoutProgram" component={WorkoutProgram} />
               <Stack.Screen name="UserProfile" component={UserProfile} />
               <Stack.Screen name="CoachRequests" component={CoachRequests} />
+              <Stack.Screen name="FindCoach" component={FindCoach} />
             </>
           )}
         </Stack.Navigator>
