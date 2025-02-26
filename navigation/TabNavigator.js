@@ -1,64 +1,187 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createStackNavigator } from "@react-navigation/stack";
+import { TouchableOpacity, StyleSheet } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
-import AthleteHome from "../screens/athlete/Home";
-import CoachHome from "../screens/coach/Home";
-import Analytics from "../screens/common/Analytics";
-import FindCoach from "../screens/athlete/FindCoach";
-import Settings from "../screens/common/Settings";
-import { auth } from "../config/firebase";
+import FontAwesome from "react-native-vector-icons/FontAwesome";
 
+// Import all screens
+import ClientList from "../pages/ClientsList";
+import AthleteHome from "../pages/AthleteHome";
+import ClientDetails from "../pages/ClientDetails";
+import WorkoutProgram from "../pages/WorkoutProgram";
+import CreateBlock from "../pages/CreateBlock";
+import ClientStats from "../pages/ClientStats";
+import ClientsSettings from "../pages/ClientsSettings";
+import ClientRequests from "../pages/ClientRequests";
+import AddClient from "../pages/AddClient";
+import UserProfile from "../pages/UserProfile";
+import FindCoach from "../pages/FindCoach";
+import FindClients from "../pages/FindClients";
+
+import { auth, db } from "../src/config/firebase";
+import { doc, getDoc } from "firebase/firestore";
+
+const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+const CustomTabBarButton = ({ children, onPress }) => (
+  <TouchableOpacity style={styles.tabButton} onPress={onPress}>
+    {children}
+  </TouchableOpacity>
+);
+
+// Shared stack for both coaches and athletes
+const MainStack = () => {
+  const [isAthlete, setIsAthlete] = useState(false);
+
+  useEffect(() => {
+    const checkUserRole = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        setIsAthlete(userData.role === "athlete");
+      }
+    };
+    checkUserRole();
+  }, []);
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen
+        name="MainList"
+        component={isAthlete ? AthleteHome : ClientList}
+      />
+      <Stack.Screen name="ClientDetails" component={ClientDetails} />
+      <Stack.Screen name="WorkoutProgram" component={WorkoutProgram} />
+      <Stack.Screen name="CreateBlock" component={CreateBlock} />
+      <Stack.Screen name="ClientRequests" component={ClientRequests} />
+      <Stack.Screen name="AddClient" component={AddClient} />
+      <Stack.Screen name="UserProfile" component={UserProfile} />
+      <Stack.Screen name="FindCoach" component={FindCoach} />
+    </Stack.Navigator>
+  );
+};
+
 const TabNavigator = () => {
-  const userRole = auth.currentUser?.role;
+  const [isAthlete, setIsAthlete] = useState(false);
+
+  useEffect(() => {
+    const checkUserRole = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
+        setIsAthlete(userData.role === "athlete");
+      }
+    };
+    checkUserRole();
+  }, []);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: { display: "flex" },
+        tabBarLabelStyle: { display: "none" },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
+          let IconComponent = Icon;
 
           if (route.name === "Home") {
             iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "Analytics") {
+          } else if (route.name === "Stats") {
             iconName = focused ? "stats-chart" : "stats-chart-outline";
-          } else if (route.name === "Find Coach") {
-            iconName = focused ? "search" : "search-outline";
           } else if (route.name === "Settings") {
             iconName = focused ? "settings" : "settings-outline";
+          } else if (route.name === "Find Coach") {
+            iconName = focused ? "search" : "search-outline";
+          } else if (route.name === "Find Clients") {
+            iconName = focused ? "search" : "search-outline";
           }
 
-          return <Icon name={iconName} size={size} color={color} />;
+          return <IconComponent name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: "#000",
+        tabBarActiveTintColor: "black",
         tabBarInactiveTintColor: "gray",
       })}
     >
       <Tab.Screen
         name="Home"
-        component={userRole === "coach" ? CoachHome : AthleteHome}
-        options={{ headerShown: false }}
+        component={MainStack}
+        options={{
+          title: isAthlete ? "My Progress" : "Clients",
+          tabBarButton: (props) => (
+            <CustomTabBarButton {...props}>
+              <FontAwesome
+                name={isAthlete ? "home" : "users"}
+                size={24}
+                color="#000"
+              />
+            </CustomTabBarButton>
+          ),
+        }}
       />
       <Tab.Screen
-        name="Analytics"
-        component={Analytics}
-        options={{ headerShown: false }}
+        name="Stats"
+        component={ClientStats}
+        options={{
+          tabBarButton: (props) => (
+            <CustomTabBarButton {...props}>
+              <FontAwesome name="bar-chart" size={24} color="#000" />
+            </CustomTabBarButton>
+          ),
+        }}
       />
-      {userRole !== "coach" && (
+      {isAthlete ? (
         <Tab.Screen
           name="Find Coach"
           component={FindCoach}
-          options={{ headerShown: false }}
+          options={{
+            tabBarButton: (props) => (
+              <CustomTabBarButton {...props}>
+                <Icon name="search" size={24} color="#000" />
+              </CustomTabBarButton>
+            ),
+          }}
+        />
+      ) : (
+        <Tab.Screen
+          name="Find Clients"
+          component={FindClients}
+          options={{
+            tabBarButton: (props) => (
+              <CustomTabBarButton {...props}>
+                <Icon name="search" size={24} color="#000" />
+              </CustomTabBarButton>
+            ),
+          }}
         />
       )}
       <Tab.Screen
         name="Settings"
-        component={Settings}
-        options={{ headerShown: false }}
+        component={ClientsSettings}
+        options={{
+          tabBarButton: (props) => (
+            <CustomTabBarButton {...props}>
+              <FontAwesome name="cog" size={24} color="#000" />
+            </CustomTabBarButton>
+          ),
+        }}
       />
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  tabButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 10,
+    marginHorizontal: 5,
+  },
+});
 
 export default TabNavigator;

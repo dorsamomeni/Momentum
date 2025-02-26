@@ -1,9 +1,15 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import ClientsTabs from "./ClientsTabs";
+import { View, StyleSheet } from "react-native";
+import TabNavigator from "../navigation/TabNavigator";
 
 const Clients = () => {
-  return <ClientsTabs />;
+  return <TabNavigator />;
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
 
 export default Clients;
