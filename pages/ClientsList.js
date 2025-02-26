@@ -6,11 +6,12 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  Alert,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { auth, db } from "../src/config/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayRemove } from "firebase/firestore";
 
 const ClientsList = () => {
   const navigation = useNavigation();
@@ -64,6 +65,58 @@ const ClientsList = () => {
 
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
+  };
+
+  const handleRemoveClient = (clientId, clientName) => {
+    Alert.alert(
+      "Remove Client",
+      `Are you sure you want to remove ${clientName} from your client list?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const user = auth.currentUser;
+              if (user) {
+                const coachRef = doc(db, "users", user.uid);
+                const clientRef = doc(db, "users", clientId);
+                
+                // Remove from both possible locations in coach's data
+                await updateDoc(coachRef, {
+                  athletes: arrayRemove(clientId),
+                  clientList: arrayRemove({ athleteId: clientId })
+                });
+                
+                // Remove coach from client's data
+                await updateDoc(clientRef, {
+                  coach: arrayRemove(user.uid)
+                });
+                
+                // Update local state
+                setClients(prevClients => 
+                  prevClients.filter(client => client.id !== clientId)
+                );
+                
+                // Refresh the client list
+                loadClients();
+              }
+            } catch (error) {
+              console.error("Error removing client:", error);
+              Alert.alert(
+                "Error",
+                "Failed to remove client. Please try again."
+              );
+            }
+          }
+        }
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
@@ -121,7 +174,7 @@ const ClientsList = () => {
                   style={styles.removeButton}
                   onPress={(e) => {
                     e.stopPropagation();
-                    /* Logic to remove client */
+                    handleRemoveClient(client.id, client.firstName);
                   }}
                 >
                   <Icon name="close" size={20} color="#666" />

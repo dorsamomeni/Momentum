@@ -249,19 +249,6 @@ const ClientsSettings = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Back Button Section */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={[styles.option, styles.backOption]}
-            onPress={() => navigation.goBack()}
-          >
-            <View style={styles.optionLeft}>
-              <Icon name="arrow-back-outline" size={24} color="#000" />
-              <Text style={styles.optionText}>Back to Clients</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
         {/* Bottom padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
@@ -404,10 +391,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#FF3B30",
     marginTop: 4,
-  },
-  backOption: {
-    backgroundColor: "#f8f8f8",
-    borderColor: "#f0f0f0",
   },
   scrollContainer: {
     flex: 1,
