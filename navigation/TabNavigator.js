@@ -18,6 +18,7 @@ import AddClient from "../pages/AddClient";
 import UserProfile from "../pages/UserProfile";
 import FindCoach from "../pages/FindCoach";
 import FindClients from "../pages/FindClients";
+import SendProgram from "../pages/SendProgram";
 
 import { auth, db } from "../src/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -56,6 +57,7 @@ const MainStack = () => {
       <Stack.Screen name="ClientDetails" component={ClientDetails} />
       <Stack.Screen name="WorkoutProgram" component={WorkoutProgram} />
       <Stack.Screen name="CreateBlock" component={CreateBlock} />
+      <Stack.Screen name="SendProgram" component={SendProgram} />
       <Stack.Screen name="ClientRequests" component={ClientRequests} />
       <Stack.Screen name="AddClient" component={AddClient} />
       <Stack.Screen name="UserProfile" component={UserProfile} />

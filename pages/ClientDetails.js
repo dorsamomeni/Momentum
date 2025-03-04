@@ -12,7 +12,19 @@ import {
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { auth, db } from "../src/config/firebase";
-import { writeBatch, doc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
+import {
+  writeBatch,
+  doc,
+  arrayUnion,
+  arrayRemove,
+  getDoc,
+  collection,
+  setDoc,
+  query,
+  where,
+  getDocs,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const ClientDetails = ({ route }) => {
   const navigation = useNavigation();
@@ -742,82 +754,258 @@ const ClientDetails = ({ route }) => {
   const handleNewBlock = async (blockName, sessionsPerWeek) => {
     try {
       console.log("Creating new block:", blockName);
-      // Move current block to previous blocks if it exists
-      if (activeBlocks.length > 0) {
-        setPreviousBlocks([...activeBlocks, ...previousBlocks]);
-      }
 
-      // Create new block
+      // Create new block using our new structure
       const today = new Date();
       const endDate = new Date();
       endDate.setDate(today.getDate() + 28); // 4 weeks from today
 
       const newBlock = {
-        id: Date.now().toString(),
         name: blockName,
-        startDate: today.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
-        endDate: endDate.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
-        status: "active",
-        sessionsPerWeek,
-        weeks: [
-          {
-            exercises: Array(sessionsPerWeek).fill({
-              exercises: [],
-            }),
-          },
-        ],
         coachId: auth.currentUser.uid,
         athleteId: route.params.client.id,
-        createdAt: new Date().toISOString(),
+        status: "active",
+        sessionsPerWeek,
+        startDate: today,
+        endDate: endDate,
       };
 
       // Add console log before updating Firebase
       console.log("New block to be added:", newBlock);
 
-      // Update both coach and athlete documents
+      // Create the block in Firestore
+      const blockRef = doc(collection(db, "blocks"));
+      const blockId = blockRef.id;
+
       const batch = writeBatch(db);
 
-      // Update athlete's active blocks
-      const athleteRef = doc(db, "users", route.params.client.id);
-      batch.update(athleteRef, {
-        activeBlocks: arrayUnion(newBlock),
+      // Set the block document
+      batch.set(blockRef, {
+        ...newBlock,
+        id: blockId,
+        createdAt: serverTimestamp(),
       });
 
-      // Store block in blocks collection
-      const blockRef = doc(db, "blocks", newBlock.id);
-      batch.set(blockRef, newBlock);
+      // Update athlete's document
+      const athleteRef = doc(db, "users", route.params.client.id);
+      batch.update(athleteRef, {
+        activeBlocks: arrayUnion(blockId),
+      });
 
       await batch.commit();
       console.log("Block added successfully");
 
+      // CHANGED: Only create 1 week instead of 4
+      // Create exactly ONE week
+      const weekRef = doc(collection(db, "weeks"));
+      const weekId = weekRef.id;
+
+      await setDoc(weekRef, {
+        id: weekId,
+        blockId: blockId,
+        weekNumber: 1, // Only week 1
+        daysPerWeek: sessionsPerWeek,
+        startDate: today,
+        submittedAt: serverTimestamp(),
+      });
+
+      // Create days for this week
+      for (let dayNum = 1; dayNum <= sessionsPerWeek; dayNum++) {
+        const dayRef = doc(collection(db, "days"));
+        const dayId = dayRef.id;
+
+        await setDoc(dayRef, {
+          id: dayId,
+          weekId: weekId,
+          dayNumber: dayNum,
+          submittedAt: serverTimestamp(),
+        });
+      }
+
+      // Refresh the blocks
+      fetchUserBlocks();
     } catch (error) {
       console.error("Error creating block:", error);
       Alert.alert("Error", "Failed to create training block");
     }
   };
 
-  const handleCloseBlock = (blockToClose) => {
-    // Move block to previous blocks
-    setPreviousBlocks([
-      {
-        ...blockToClose,
-        status: "completed",
-      },
-      ...previousBlocks,
-    ]);
+  // Add a new function to fetch blocks from Firestore
+  const fetchUserBlocks = async () => {
+    try {
+      // Get blocks where athleteId matches the client
+      const q = query(
+        collection(db, "blocks"),
+        where("athleteId", "==", route.params.client.id)
+      );
 
-    // Remove from active blocks
-    setActiveBlocks(
-      activeBlocks.filter((block) => block.id !== blockToClose.id)
-    );
+      const querySnapshot = await getDocs(q);
+      const activeBlocksData = [];
+      const previousBlocksData = [];
+
+      querySnapshot.forEach((doc) => {
+        const blockData = { id: doc.id, ...doc.data() };
+
+        // Validate block data before adding to the arrays
+        if (!blockData.name) {
+          console.warn("Block missing name:", blockData.id);
+          blockData.name = "Untitled Block"; // Provide a default name
+        }
+
+        // Format dates for display with error handling
+        if (blockData.startDate) {
+          try {
+            if (
+              typeof blockData.startDate === "object" &&
+              blockData.startDate.toDate
+            ) {
+              blockData.startDate = blockData.startDate
+                .toDate()
+                .toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                });
+            } else if (blockData.startDate instanceof Date) {
+              blockData.startDate = blockData.startDate.toLocaleDateString(
+                "en-US",
+                {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                }
+              );
+            }
+          } catch (e) {
+            console.error("Error formatting startDate:", e);
+            blockData.startDate = "Unknown date";
+          }
+        }
+
+        if (blockData.endDate) {
+          try {
+            if (
+              typeof blockData.endDate === "object" &&
+              blockData.endDate.toDate
+            ) {
+              blockData.endDate = blockData.endDate
+                .toDate()
+                .toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                });
+            } else if (blockData.endDate instanceof Date) {
+              blockData.endDate = blockData.endDate.toLocaleDateString(
+                "en-US",
+                {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                }
+              );
+            }
+          } catch (e) {
+            console.error("Error formatting endDate:", e);
+            blockData.endDate = "Unknown date";
+          }
+        }
+
+        // Sort by status with clear validation
+        if (blockData.status === "active") {
+          activeBlocksData.push(blockData);
+        } else {
+          previousBlocksData.push(blockData);
+        }
+      });
+
+      // Sort blocks by createdAt (newest first)
+      activeBlocksData.sort((a, b) => {
+        const dateA = a.createdAt
+          ? new Date(a.createdAt.seconds * 1000)
+          : new Date(0);
+        const dateB = b.createdAt
+          ? new Date(b.createdAt.seconds * 1000)
+          : new Date(0);
+        return dateB - dateA;
+      });
+
+      previousBlocksData.sort((a, b) => {
+        const dateA = a.createdAt
+          ? new Date(a.createdAt.seconds * 1000)
+          : new Date(0);
+        const dateB = b.createdAt
+          ? new Date(b.createdAt.seconds * 1000)
+          : new Date(0);
+        return dateB - dateA;
+      });
+
+      console.log("Fetched blocks:", {
+        active: activeBlocksData.length,
+        previous: previousBlocksData.length,
+      });
+
+      setActiveBlocks(activeBlocksData);
+      setPreviousBlocks(previousBlocksData);
+    } catch (error) {
+      console.error("Error fetching blocks:", error);
+      Alert.alert("Error", "Failed to load training blocks");
+    }
+  };
+
+  // Call fetchUserBlocks in useEffect
+  useEffect(() => {
+    fetchUserBlocks();
+  }, [route.params.client.id]);
+
+  const handleCloseBlock = async (blockToClose) => {
+    try {
+      console.log("Closing block:", blockToClose.id);
+
+      // Create batch write
+      const batch = writeBatch(db);
+
+      // Get references
+      const athleteRef = doc(db, "users", route.params.client.id);
+      const blockRef = doc(db, "blocks", blockToClose.id);
+
+      // Update the block status in Firestore
+      batch.update(blockRef, {
+        status: "completed",
+        lastUpdated: serverTimestamp(),
+      });
+
+      // Use arrayRemove with just the blockId string (not the whole object)
+      batch.update(athleteRef, {
+        activeBlocks: arrayRemove(blockToClose.id),
+      });
+
+      // Add to previousBlocks if needed
+      // This depends on how you're tracking previous blocks in your data model
+
+      // Commit the batch
+      await batch.commit();
+
+      // Update local state
+      // Move block to previous blocks
+      setPreviousBlocks([
+        {
+          ...blockToClose,
+          status: "completed",
+        },
+        ...previousBlocks,
+      ]);
+
+      // Remove from active blocks
+      setActiveBlocks(
+        activeBlocks.filter((block) => block.id !== blockToClose.id)
+      );
+
+      console.log("Block closed successfully");
+    } catch (error) {
+      console.error("Error closing block:", error);
+      Alert.alert("Error", "Failed to close block");
+    }
   };
 
   const handleReopenBlock = (blockToReopen) => {
@@ -887,7 +1075,7 @@ const ClientDetails = ({ route }) => {
         return dateB - dateA;
       })
       .filter((block) =>
-        (block.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+        (block.name || "").toLowerCase().includes(searchQuery.toLowerCase())
       );
   };
 
@@ -901,12 +1089,12 @@ const ClientDetails = ({ route }) => {
       const blockRef = doc(db, "blocks", blockId);
 
       // Get current block to remove
-      const blockToRemove = activeBlocks.find(block => block.id === blockId);
-      
+      const blockToRemove = activeBlocks.find((block) => block.id === blockId);
+
       if (isActive) {
         // Remove from athlete's active blocks
         batch.update(athleteRef, {
-          activeBlocks: arrayRemove(blockToRemove)
+          activeBlocks: arrayRemove(blockToRemove),
         });
 
         // Delete from blocks collection
@@ -916,13 +1104,14 @@ const ClientDetails = ({ route }) => {
         setActiveBlocks(activeBlocks.filter((block) => block.id !== blockId));
       } else {
         // Handle previous blocks if needed
-        setPreviousBlocks(previousBlocks.filter((block) => block.id !== blockId));
+        setPreviousBlocks(
+          previousBlocks.filter((block) => block.id !== blockId)
+        );
       }
 
       // Commit the batch
       await batch.commit();
       console.log("Block deleted successfully");
-
     } catch (error) {
       console.error("Error deleting block:", error);
       Alert.alert("Error", "Failed to delete block");
@@ -930,67 +1119,100 @@ const ClientDetails = ({ route }) => {
   };
 
   const handleUpdateBlock = (updatedBlock) => {
-    setActiveBlocks(currentBlocks => 
-      currentBlocks.map(block => 
+    setActiveBlocks((currentBlocks) =>
+      currentBlocks.map((block) =>
         block.id === updatedBlock.id ? updatedBlock : block
       )
     );
   };
 
-  const renderBlock = (block, isPrevious = false) => (
-    <TouchableOpacity
-      key={block.id}
-      style={[styles.blockCard, isPrevious && styles.previousBlock]}
-      onPress={() =>
-        navigation.navigate("WorkoutProgram", {
-          block,
-          onCloseBlock: () => {},
-          isPreviousBlock: isPrevious,
-          onReopenBlock: () => {},
-          isAthlete: false,
-          onUpdateBlock: handleUpdateBlock
-        })
+  const renderBlock = (block, isPrevious = false) => {
+    // Format dates if they are Firebase Timestamp objects
+    const formatDate = (dateField) => {
+      if (!dateField) return "";
+
+      // If it's a Firebase Timestamp
+      if (dateField && typeof dateField === "object" && dateField.seconds) {
+        const date = new Date(dateField.seconds * 1000);
+        return date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
       }
-    >
-      <View style={styles.blockHeader}>
-        <View style={styles.blockTitleContainer}>
-          <Text style={styles.blockName}>{block.name}</Text>
-          <TouchableOpacity
-            style={styles.blockRenameButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleRenameBlock(block);
-            }}
-          >
-            <Icon name="pencil-outline" size={16} color="#666" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.blockActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleDeleteBlock(block.id, true);
-            }}
-          >
-            <Icon name="trash-outline" size={18} color="#FF3B30" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.duplicateButton}
-            onPress={() => handleDuplicateBlock(block)}
-          >
-            <Icon name="copy-outline" size={18} color="#4CAF50" />
-          </TouchableOpacity>
-          <View style={styles.statusBadge}>
-            <Icon name="radio-button-on" size={18} color="#4CAF50" />
+
+      // If it's already a string
+      if (typeof dateField === "string") {
+        return dateField;
+      }
+
+      // If it's a JavaScript Date object
+      if (dateField instanceof Date) {
+        return dateField.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+
+      return String(dateField); // Fallback
+    };
+
+    return (
+      <TouchableOpacity
+        key={block.id}
+        style={[styles.blockCard, isPrevious && styles.previousBlock]}
+        onPress={() =>
+          navigation.navigate("WorkoutProgram", {
+            blockId: block.id,
+            onCloseBlock: handleCloseBlock,
+            isPreviousBlock: isPrevious,
+            onReopenBlock: handleReopenBlock,
+            isAthlete: false,
+            onUpdateBlock: handleUpdateBlock,
+          })
+        }
+      >
+        <View style={styles.blockHeader}>
+          <View style={styles.blockTitleContainer}>
+            <Text style={styles.blockName}>{block.name}</Text>
+            <TouchableOpacity
+              style={styles.blockRenameButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleRenameBlock(block);
+              }}
+            >
+              <Icon name="pencil-outline" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.blockActions}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDeleteBlock(block.id, true);
+              }}
+            >
+              <Icon name="trash-outline" size={18} color="#FF3B30" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.duplicateButton}
+              onPress={() => handleDuplicateBlock(block)}
+            >
+              <Icon name="copy-outline" size={18} color="#4CAF50" />
+            </TouchableOpacity>
+            <View style={styles.statusBadge}>
+              <Icon name="radio-button-on" size={18} color="#4CAF50" />
+            </View>
           </View>
         </View>
-      </View>
-      <Text style={styles.dateText}>
-        {block.startDate} - {block.endDate}
-      </Text>
-    </TouchableOpacity>
-  );
+        <Text style={styles.dateText}>
+          {formatDate(block.startDate)} - {formatDate(block.endDate)}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -1062,7 +1284,9 @@ const ClientDetails = ({ route }) => {
             Previous Blocks
           </Text>
           {previousBlocks.length > 0 ? (
-            filterBlocks(previousBlocks).map((block) => renderBlock(block, true))
+            filterBlocks(previousBlocks).map((block) =>
+              renderBlock(block, true)
+            )
           ) : (
             <View style={styles.noBlockContainer}>
               <Text style={styles.noBlockText}>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,26 +11,63 @@ import {
   PanResponder,
   Modal,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useSettings } from "../contexts/SettingsContext";
-import { doc, updateDoc, arrayUnion, arrayRemove, writeBatch } from "firebase/firestore";
+import {
+  doc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  writeBatch,
+  collection,
+  query,
+  where,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+  getDoc,
+} from "firebase/firestore";
 import { db } from "../src/config/firebase";
 
 const { width } = Dimensions.get("window");
 
 const WorkoutProgram = ({ route }) => {
   const navigation = useNavigation();
-  const { block, onCloseBlock, isPreviousBlock, onReopenBlock, isAthlete } = route.params;
+  const {
+    blockId = "",
+    onCloseBlock = () => {},
+    isPreviousBlock = false,
+    onReopenBlock = () => {},
+    isAthlete = false,
+  } = route.params || {};
+
   const { weightUnit } = useSettings();
-  const days = Array(block.sessionsPerWeek).fill(null);
+
+  const [block, setBlock] = useState(null);
+  const [weeks, setWeeks] = useState([]);
+  const [days, setDays] = useState({}); // Map of weekId -> array of days
+  const [exercises, setExercises] = useState({}); // Map of dayId -> array of exercises
+
+  const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
-  const [totalWeeks, setTotalWeeks] = useState(block.weeks?.length || 1);
-  const [blockWeeks, setBlockWeeks] = useState(
-    block.weeks || [
+  const [totalWeeks, setTotalWeeks] = useState(1);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [blockWeeks, setBlockWeeks] = useState(() => {
+    console.log("INITIALIZING BLOCKWEEKS, block:", block);
+    // If block already has weeks, use those
+    if (block?.weeks && Array.isArray(block.weeks) && block.weeks.length > 0) {
+      return block.weeks;
+    }
+
+    // Otherwise, create EXACTLY ONE week
+    return [
       {
-        exercises: Array(block.sessionsPerWeek).fill({
+        exercises: Array(block?.sessionsPerWeek || 1).fill({
           exercises: [
             {
               name: "",
@@ -46,21 +83,193 @@ const WorkoutProgram = ({ route }) => {
           ],
         }),
       },
-    ]
-  );
-  const weeks = Array(totalWeeks).fill(null);
-  const scrollViewRef = useRef(null);
-  const [isProgrammaticScroll, setIsProgrammaticScroll] = useState(false);
-  const [weekNames, setWeekNames] = useState(
-    Array(totalWeeks)
-      .fill("")
-      .map((_, i) => `Week ${i + 1}`)
-  );
+    ];
+  });
+  const weeksSliderRef = useRef(null);
   const [isRenameModalVisible, setIsRenameModalVisible] = useState(false);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(null);
   const [tempWeekName, setTempWeekName] = useState("");
-  const weeksSliderRef = useRef(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const scrollViewRef = useRef(null);
+  const [isProgrammaticScroll, setIsProgrammaticScroll] = useState(false);
+  const [weekNames, setWeekNames] = useState(() => {
+    // Create exactly one week name for a new block
+    if (
+      !block?.weeks ||
+      !Array.isArray(block.weeks) ||
+      block.weeks.length === 0
+    ) {
+      return ["Week 1"];
+    }
+
+    // For existing blocks, create names based on actual week count
+    return Array(block.weeks.length)
+      .fill("")
+      .map((_, i) => `Week ${i + 1}`);
+  });
+
+  const safelyAccessProperty = (obj, path, defaultValue = "") => {
+    try {
+      const keys = path.split(".");
+      let result = obj;
+      for (const key of keys) {
+        if (result === undefined || result === null) return defaultValue;
+        result = result[key];
+      }
+      return result === undefined || result === null ? defaultValue : result;
+    } catch (e) {
+      console.log(`Error accessing ${path}:`, e);
+      return defaultValue;
+    }
+  };
+
+  useEffect(() => {
+    fetchBlockData();
+  }, [blockId]);
+
+  useEffect(() => {
+    console.log("BLOCK DATA:", block);
+    console.log("WEEKS LENGTH:", block?.weeks?.length);
+    console.log("TOTAL WEEKS STATE:", totalWeeks);
+  }, []);
+
+  const fetchBlockData = async () => {
+    try {
+      setLoading(true);
+
+      // Check if blockId is valid
+      if (!blockId) {
+        console.error("Invalid blockId:", blockId);
+        Alert.alert("Error", "Invalid workout program");
+        navigation.goBack();
+        return;
+      }
+
+      // Fetch block data with extra error handling
+      let blockData;
+      try {
+        const blockDoc = await getDoc(doc(db, "blocks", blockId));
+        if (!blockDoc.exists()) {
+          Alert.alert("Error", "Block not found");
+          navigation.goBack();
+          return;
+        }
+        blockData = { id: blockDoc.id, ...blockDoc.data() };
+      } catch (error) {
+        console.error("Error fetching block:", error);
+        Alert.alert("Error", "Failed to load workout program");
+        navigation.goBack();
+        return;
+      }
+
+      setBlock(blockData);
+
+      // Fetch weeks with defensive coding
+      let weeksData = [];
+      try {
+        // Use a simple equality check here to avoid any string operations
+        const weeksQuery = query(
+          collection(db, "weeks"),
+          where("blockId", "==", blockId)
+        );
+
+        const weeksSnapshot = await getDocs(weeksQuery);
+        weeksSnapshot.forEach((doc) => {
+          weeksData.push({ id: doc.id, ...doc.data() });
+        });
+      } catch (error) {
+        console.error("Error fetching weeks:", error);
+        // Continue with empty weeks array
+        weeksData = [];
+      }
+
+      // Sort weeks by weekNumber with fallbacks
+      weeksData.sort((a, b) => {
+        const aNum = parseInt(a.weekNumber || 0);
+        const bNum = parseInt(b.weekNumber || 0);
+        return aNum - bNum;
+      });
+
+      setWeeks(weeksData);
+      setTotalWeeks(weeksData.length || 1);
+
+      // Reset days and exercises maps to avoid stale data
+      const daysMap = {};
+      const exercisesMap = {};
+
+      // For each week, fetch days with defensive coding
+      for (const week of weeksData) {
+        if (!week.id) continue;
+
+        let daysData = [];
+        try {
+          const daysQuery = query(
+            collection(db, "days"),
+            where("weekId", "==", week.id)
+          );
+
+          const daysSnapshot = await getDocs(daysQuery);
+          daysSnapshot.forEach((doc) => {
+            daysData.push({ id: doc.id, ...doc.data() });
+          });
+        } catch (error) {
+          console.error(`Error fetching days for week ${week.id}:`, error);
+          // Continue with empty days array
+          daysData = [];
+        }
+
+        // Sort days by dayNumber with fallbacks
+        daysData.sort((a, b) => {
+          const aNum = parseInt(a.dayNumber || 0);
+          const bNum = parseInt(b.dayNumber || 0);
+          return aNum - bNum;
+        });
+
+        daysMap[week.id] = daysData;
+
+        // For each day, fetch exercises with defensive coding
+        for (const day of daysData) {
+          if (!day.id) continue;
+
+          let exercisesData = [];
+          try {
+            const exercisesQuery = query(
+              collection(db, "exercises"),
+              where("dayId", "==", day.id)
+            );
+
+            const exercisesSnapshot = await getDocs(exercisesQuery);
+            exercisesSnapshot.forEach((doc) => {
+              const exerciseData = doc.data();
+              // Ensure sets is always an array
+              const sets = Array.isArray(exerciseData.sets)
+                ? exerciseData.sets
+                : [];
+              exercisesData.push({
+                id: doc.id,
+                ...exerciseData,
+                sets: sets,
+              });
+            });
+          } catch (error) {
+            console.error(`Error fetching exercises for day ${day.id}:`, error);
+            // Continue with empty exercises array
+            exercisesData = [];
+          }
+
+          exercisesMap[day.id] = exercisesData;
+        }
+      }
+
+      setExercises(exercisesMap);
+      setDays(daysMap);
+    } catch (error) {
+      console.error("Error fetching block data:", error);
+      Alert.alert("Error", "Failed to load workout program");
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleScroll = (event) => {
     if (isProgrammaticScroll) return;
@@ -69,86 +278,252 @@ const WorkoutProgram = ({ route }) => {
     setCurrentWeek(week);
   };
 
-  const handleAddWeek = () => {
-    const newWeek = {
-      exercises: Array(block.sessionsPerWeek).fill({
-        exercises: [
-          {
-            name: "",
-            sets: [
+  const handleAddWeek = async () => {
+    try {
+      // Start loading state
+      setIsSaving(true);
+
+      // Create a new week in Firestore
+      const weekRef = doc(collection(db, "weeks"));
+      const weekId = weekRef.id;
+      const weekNumber = totalWeeks + 1;
+
+      // Set week data in Firestore
+      await setDoc(weekRef, {
+        id: weekId,
+        blockId: block.id,
+        weekNumber: weekNumber,
+        daysPerWeek: block.sessionsPerWeek || 1,
+        startDate: new Date(),
+        submittedAt: serverTimestamp(),
+      });
+
+      // Create days for this week
+      const newDays = [];
+      for (let dayNum = 1; dayNum <= (block.sessionsPerWeek || 1); dayNum++) {
+        const dayRef = doc(collection(db, "days"));
+        const dayId = dayRef.id;
+
+        await setDoc(dayRef, {
+          id: dayId,
+          weekId: weekId,
+          dayNumber: dayNum,
+          submittedAt: serverTimestamp(),
+        });
+
+        newDays.push({
+          id: dayId,
+          weekId: weekId,
+          dayNumber: dayNum,
+        });
+      }
+
+      // Update state with the new week and days
+      const newWeek = {
+        id: weekId,
+        blockId: block.id,
+        weekNumber: weekNumber,
+        daysPerWeek: block.sessionsPerWeek || 1,
+      };
+
+      // Update weeks state
+      setWeeks([...weeks, newWeek]);
+
+      // Update days state
+      setDays({
+        ...days,
+        [weekId]: newDays,
+      });
+
+      const newWeekName = `Week ${weekNumber}`;
+
+      setIsProgrammaticScroll(true);
+
+      // Update blockWeeks - this is for local state
+      setBlockWeeks([
+        ...blockWeeks,
+        {
+          exercises: Array(block?.sessionsPerWeek || 1).fill({
+            exercises: [
               {
-                scheme: "",
-                weight: "",
-                setCount: "1",
+                name: "",
+                sets: [
+                  {
+                    scheme: "",
+                    weight: "",
+                    setCount: "1",
+                  },
+                ],
+                notes: "",
               },
             ],
-            notes: "",
-          },
-        ],
-      }),
-    };
+          }),
+        },
+      ]);
 
-    const newTotalWeeks = totalWeeks + 1;
-    const newWeekName = `Week ${newTotalWeeks}`;
+      const newTotalWeeks = totalWeeks + 1;
+      setTotalWeeks(newTotalWeeks);
+      setWeekNames([...weekNames, newWeekName]);
 
-    setIsProgrammaticScroll(true);
+      // Wait for state updates to process
+      requestAnimationFrame(() => {
+        // Set current week and trigger both scrolls simultaneously
+        setCurrentWeek(newTotalWeeks);
 
-    // Update all states at once before animations
-    setBlockWeeks([...blockWeeks, newWeek]);
-    setTotalWeeks(newTotalWeeks);
-    setWeekNames([...weekNames, newWeekName]);
+        // Perform both scroll animations together
+        scrollViewRef.current?.scrollTo({
+          x: (newTotalWeeks - 1) * width,
+          animated: true,
+        });
+        weeksSliderRef.current?.scrollToEnd({
+          animated: true,
+          duration: 300,
+        });
 
-    // Wait for state updates to process
-    requestAnimationFrame(() => {
-      // Set current week and trigger both scrolls simultaneously
-      setCurrentWeek(newTotalWeeks);
-
-      // Perform both scroll animations together
-      scrollViewRef.current?.scrollTo({
-        x: (newTotalWeeks - 1) * width,
-        animated: true,
+        // Reset programmatic scroll flag after animations complete
+        setTimeout(() => {
+          setIsProgrammaticScroll(false);
+          setIsSaving(false);
+        }, 300);
       });
-      weeksSliderRef.current?.scrollToEnd({
-        animated: true,
-        duration: 300, // Match the default React Native scroll animation duration
-      });
-
-      // Reset programmatic scroll flag after animations complete
-      setTimeout(() => {
-        setIsProgrammaticScroll(false);
-      }, 300);
-    });
+    } catch (error) {
+      console.error("Error adding week:", error);
+      Alert.alert("Error", "Failed to add week");
+      setIsSaving(false);
+    }
   };
 
-  const handleCopyWeek = () => {
-    const weekToCopy = JSON.parse(JSON.stringify(blockWeeks[currentWeek - 1]));
-    const newTotalWeeks = totalWeeks + 1;
-    const newWeekName = `Week ${newTotalWeeks}`;
+  const handleCopyWeek = async () => {
+    try {
+      // Start loading state
+      setIsSaving(true);
 
-    setIsProgrammaticScroll(true);
+      // Check if the current week exists
+      if (!weeks[currentWeek - 1]) {
+        throw new Error("Cannot copy non-existent week");
+      }
 
-    // Update all states at once before animations
-    setBlockWeeks([...blockWeeks, weekToCopy]);
-    setTotalWeeks(newTotalWeeks);
-    setWeekNames([...weekNames, newWeekName]);
+      // Get the current week from the weeks array
+      const weekToCopy = weeks[currentWeek - 1];
 
-    requestAnimationFrame(() => {
-      setCurrentWeek(newTotalWeeks);
+      // Create a new week in Firestore
+      const weekRef = doc(collection(db, "weeks"));
+      const weekId = weekRef.id;
+      const weekNumber = totalWeeks + 1;
 
-      // Perform both scroll animations together
-      scrollViewRef.current?.scrollTo({
-        x: (newTotalWeeks - 1) * width,
-        animated: true,
+      // Copy week data to Firestore
+      await setDoc(weekRef, {
+        id: weekId,
+        blockId: block.id,
+        weekNumber: weekNumber,
+        daysPerWeek: weekToCopy.daysPerWeek || block.sessionsPerWeek || 1,
+        startDate: new Date(),
+        submittedAt: serverTimestamp(),
       });
-      weeksSliderRef.current?.scrollToEnd({
-        animated: true,
-        duration: 300,
+
+      // Get days for week being copied
+      const daysForWeek = days[weekToCopy.id] || [];
+      const newDays = [];
+
+      // Copy each day and its exercises
+      for (const originalDay of daysForWeek) {
+        const dayRef = doc(collection(db, "days"));
+        const dayId = dayRef.id;
+
+        // Create new day
+        await setDoc(dayRef, {
+          id: dayId,
+          weekId: weekId,
+          dayNumber: originalDay.dayNumber,
+          submittedAt: serverTimestamp(),
+        });
+
+        newDays.push({
+          id: dayId,
+          weekId: weekId,
+          dayNumber: originalDay.dayNumber,
+        });
+
+        // Copy exercises for this day
+        const originalExercises = exercises[originalDay.id] || [];
+        for (const originalExercise of originalExercises) {
+          const exerciseRef = doc(collection(db, "exercises"));
+          const exerciseId = exerciseRef.id;
+
+          // Clone the exercise but with new ID and dayId
+          const newExercise = {
+            ...JSON.parse(JSON.stringify(originalExercise)),
+            id: exerciseId,
+            dayId: dayId,
+          };
+
+          await setDoc(exerciseRef, newExercise);
+
+          // Update local exercises state
+          setExercises((prev) => {
+            const updatedExercises = { ...prev };
+            if (!updatedExercises[dayId]) {
+              updatedExercises[dayId] = [];
+            }
+            updatedExercises[dayId] = [...updatedExercises[dayId], newExercise];
+            return updatedExercises;
+          });
+        }
+      }
+
+      // Update state with the new week
+      const newWeek = {
+        id: weekId,
+        blockId: block.id,
+        weekNumber: weekNumber,
+        daysPerWeek: weekToCopy.daysPerWeek || block.sessionsPerWeek || 1,
+      };
+
+      // Update weeks state
+      setWeeks([...weeks, newWeek]);
+
+      // Update days state
+      setDays({
+        ...days,
+        [weekId]: newDays,
       });
 
-      setTimeout(() => {
-        setIsProgrammaticScroll(false);
-      }, 300);
-    });
+      const newWeekName = `Week ${weekNumber}`;
+
+      setIsProgrammaticScroll(true);
+
+      // Update UI state
+      const weekToCopyLocal = JSON.parse(
+        JSON.stringify(blockWeeks[currentWeek - 1])
+      );
+      setBlockWeeks([...blockWeeks, weekToCopyLocal]);
+      const newTotalWeeks = totalWeeks + 1;
+      setTotalWeeks(newTotalWeeks);
+      setWeekNames([...weekNames, newWeekName]);
+
+      requestAnimationFrame(() => {
+        setCurrentWeek(newTotalWeeks);
+
+        // Perform both scroll animations together
+        scrollViewRef.current?.scrollTo({
+          x: (newTotalWeeks - 1) * width,
+          animated: true,
+        });
+        weeksSliderRef.current?.scrollToEnd({
+          animated: true,
+          duration: 300,
+        });
+
+        setTimeout(() => {
+          setIsProgrammaticScroll(false);
+          setIsSaving(false);
+        }, 300);
+      });
+    } catch (error) {
+      console.error("Error copying week:", error);
+      Alert.alert("Error", "Failed to copy week");
+      setIsSaving(false);
+    }
   };
 
   const handleDeleteWeek = () => {
@@ -179,6 +554,11 @@ const WorkoutProgram = ({ route }) => {
   };
 
   const handleReopenBlock = () => {
+    if (typeof onReopenBlock !== "function") {
+      console.warn("onReopenBlock is not a function");
+      navigation.goBack();
+      return;
+    }
     // Call the callback to update the parent state
     onReopenBlock(block);
     // Navigate back to the client details screen
@@ -186,64 +566,380 @@ const WorkoutProgram = ({ route }) => {
   };
 
   const handleCloseBlock = () => {
+    if (typeof onCloseBlock !== "function") {
+      console.warn("onCloseBlock is not a function");
+      navigation.goBack();
+      return;
+    }
+
+    // Ensure we have a valid block with ID
+    if (!block || !block.id) {
+      console.error("Cannot close block: Invalid block data");
+      Alert.alert("Error", "Unable to close block");
+      return;
+    }
+
+    console.log("Closing block from WorkoutProgram:", block.id);
+
     // Call the callback to update the parent state
     onCloseBlock(block);
+
     // Navigate back to the client details screen
     navigation.goBack();
   };
 
-  const handleAddExercise = (weekIndex, dayIndex) => {
-    const newExercise = {
-      name: "",
-      sets: [
-        {
-          scheme: "",
-          weight: "",
-          setCount: "1",
-        },
-      ],
-      notes: "",
-    };
+  const handleAddExercise = async (weekId, dayId) => {
+    try {
+      // Create a new exercise
+      const exerciseRef = doc(collection(db, "exercises"));
+      const exerciseId = exerciseRef.id;
 
-    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
-    if (!updatedWeeks[weekIndex].exercises[dayIndex].exercises) {
-      updatedWeeks[weekIndex].exercises[dayIndex].exercises = [];
+      const newExercise = {
+        id: exerciseId,
+        dayId: dayId,
+        name: "",
+        sets: [
+          {
+            set_number: 1,
+            scheme: "",
+          },
+        ],
+        notes: "",
+      };
+
+      await setDoc(exerciseRef, newExercise);
+
+      // Update local state
+      setExercises((prev) => {
+        const updatedExercises = { ...prev };
+        if (!updatedExercises[dayId]) {
+          updatedExercises[dayId] = [];
+        }
+        updatedExercises[dayId] = [...updatedExercises[dayId], newExercise];
+        return updatedExercises;
+      });
+    } catch (error) {
+      console.error("Error adding exercise:", error);
+      Alert.alert("Error", "Failed to add exercise");
     }
-    updatedWeeks[weekIndex].exercises[dayIndex].exercises.push(newExercise);
-    setBlockWeeks(updatedWeeks);
   };
 
-  const handleAddSet = (weekIndex, dayIndex, exerciseIndex) => {
-    const updatedWeeks = JSON.parse(JSON.stringify(blockWeeks));
-    const exercise =
-      updatedWeeks[weekIndex].exercises[dayIndex].exercises[exerciseIndex];
+  const handleAddSet = async (exerciseId, dayId) => {
+    try {
+      // Find the exercise
+      const exerciseDoc = await getDoc(doc(db, "exercises", exerciseId));
+      if (!exerciseDoc.exists()) {
+        throw new Error("Exercise not found");
+      }
 
-    if (!exercise.sets) {
-      exercise.sets = [];
+      const exerciseData = exerciseDoc.data();
+      const sets = exerciseData.sets || [];
+      const newSetNumber =
+        sets.length > 0 ? sets[sets.length - 1].set_number + 1 : 1;
+
+      // Add a new set
+      const newSets = [
+        ...sets,
+        {
+          set_number: newSetNumber,
+          scheme: "",
+        },
+      ];
+
+      // Update the exercise
+      await updateDoc(doc(db, "exercises", exerciseId), {
+        sets: newSets,
+      });
+
+      // Update local state
+      setExercises((prev) => {
+        const updatedExercises = { ...prev };
+        const dayExercises = [...updatedExercises[dayId]];
+        const exerciseIndex = dayExercises.findIndex(
+          (ex) => ex.id === exerciseId
+        );
+
+        if (exerciseIndex !== -1) {
+          dayExercises[exerciseIndex] = {
+            ...dayExercises[exerciseIndex],
+            sets: newSets,
+          };
+          updatedExercises[dayId] = dayExercises;
+        }
+
+        return updatedExercises;
+      });
+    } catch (error) {
+      console.error("Error adding set:", error);
+      Alert.alert("Error", "Failed to add set");
     }
+  };
 
-    exercise.sets.push({
-      scheme: "",
-      weight: "",
-    });
+  const handleUpdateExercise = async (exerciseId, dayId, field, value) => {
+    try {
+      // Update the exercise in Firestore
+      await updateDoc(doc(db, "exercises", exerciseId), {
+        [field]: value,
+      });
 
-    setBlockWeeks(updatedWeeks);
+      // Update local state
+      setExercises((prev) => {
+        const updatedExercises = { ...prev };
+        const dayExercises = [...updatedExercises[dayId]];
+        const exerciseIndex = dayExercises.findIndex(
+          (ex) => ex.id === exerciseId
+        );
+
+        if (exerciseIndex !== -1) {
+          dayExercises[exerciseIndex] = {
+            ...dayExercises[exerciseIndex],
+            [field]: value,
+          };
+          updatedExercises[dayId] = dayExercises;
+        }
+
+        return updatedExercises;
+      });
+    } catch (error) {
+      console.error("Error updating exercise:", error);
+      Alert.alert("Error", "Failed to update exercise");
+    }
+  };
+
+  const handleUpdateSet = async (exerciseId, dayId, setIndex, field, value) => {
+    try {
+      // Find the exercise
+      const exerciseDoc = await getDoc(doc(db, "exercises", exerciseId));
+      if (!exerciseDoc.exists()) {
+        throw new Error("Exercise not found");
+      }
+
+      const exerciseData = exerciseDoc.data();
+      const sets = [...(exerciseData.sets || [])];
+
+      // Update the specific set
+      if (sets[setIndex]) {
+        sets[setIndex] = {
+          ...sets[setIndex],
+          [field]: value,
+        };
+
+        // Update the exercise in Firestore
+        await updateDoc(doc(db, "exercises", exerciseId), {
+          sets: sets,
+        });
+
+        // Update local state
+        setExercises((prev) => {
+          const updatedExercises = { ...prev };
+          const dayExercises = [...updatedExercises[dayId]];
+          const exerciseIndex = dayExercises.findIndex(
+            (ex) => ex.id === exerciseId
+          );
+
+          if (exerciseIndex !== -1) {
+            dayExercises[exerciseIndex] = {
+              ...dayExercises[exerciseIndex],
+              sets: sets,
+            };
+            updatedExercises[dayId] = dayExercises;
+          }
+
+          return updatedExercises;
+        });
+      }
+    } catch (error) {
+      console.error("Error updating set:", error);
+      Alert.alert("Error", "Failed to update set");
+    }
+  };
+
+  const handleDeleteExercise = async (exerciseId, dayId) => {
+    try {
+      // Delete the exercise from Firestore
+      await deleteDoc(doc(db, "exercises", exerciseId));
+
+      // Update local state
+      setExercises((prev) => {
+        const updatedExercises = { ...prev };
+        updatedExercises[dayId] = updatedExercises[dayId].filter(
+          (ex) => ex.id !== exerciseId
+        );
+        return updatedExercises;
+      });
+    } catch (error) {
+      console.error("Error deleting exercise:", error);
+      Alert.alert("Error", "Failed to delete exercise");
+    }
+  };
+
+  const handleDeleteSet = async (exerciseId, dayId, setIndex) => {
+    try {
+      // Find the exercise
+      const exerciseDoc = await getDoc(doc(db, "exercises", exerciseId));
+      if (!exerciseDoc.exists()) {
+        throw new Error("Exercise not found");
+      }
+
+      const exerciseData = exerciseDoc.data();
+      const sets = [...(exerciseData.sets || [])];
+
+      // Remove the set at the specified index
+      if (sets.length > 1) {
+        // Keep at least one set
+        sets.splice(setIndex, 1);
+
+        // Update the exercise in Firestore
+        await updateDoc(doc(db, "exercises", exerciseId), {
+          sets: sets,
+        });
+
+        // Update local state
+        setExercises((prev) => {
+          const updatedExercises = { ...prev };
+          const dayExercises = [...updatedExercises[dayId]];
+          const exerciseIndex = dayExercises.findIndex(
+            (ex) => ex.id === exerciseId
+          );
+
+          if (exerciseIndex !== -1) {
+            dayExercises[exerciseIndex] = {
+              ...dayExercises[exerciseIndex],
+              sets: sets,
+            };
+            updatedExercises[dayId] = dayExercises;
+          }
+
+          return updatedExercises;
+        });
+      } else {
+        Alert.alert("Error", "Cannot delete the last set");
+      }
+    } catch (error) {
+      console.error("Error deleting set:", error);
+      Alert.alert("Error", "Failed to delete set");
+    }
+  };
+
+  const handleSubmitProgram = async () => {
+    if (isAthlete) return;
+
+    try {
+      setIsSaving(true);
+
+      // Update the block status
+      await updateDoc(doc(db, "blocks", blockId), {
+        status: "active",
+        lastUpdated: serverTimestamp(),
+      });
+
+      Alert.alert("Success", "Program has been updated and sent to athlete", [
+        { text: "OK", onPress: () => navigation.goBack() },
+      ]);
+    } catch (error) {
+      console.error("Error submitting program:", error);
+      Alert.alert("Error", "Failed to submit program");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "";
+
+    try {
+      // Check if it's a Firebase Timestamp object
+      if (timestamp && typeof timestamp === "object" && timestamp.seconds) {
+        // Convert to JavaScript Date
+        const date = new Date(timestamp.seconds * 1000);
+        // Format date as needed - this is a simple example, adjust as needed
+        return date.toLocaleDateString();
+      }
+
+      // If it's already a string, return as is
+      if (typeof timestamp === "string") {
+        return timestamp;
+      }
+
+      // Default fallback
+      return "";
+    } catch (error) {
+      console.error("Error formatting timestamp:", error);
+      return "";
+    }
   };
 
   const ExerciseItem = ({ exercise, index, weekIndex, dayIndex }) => {
+    // Add local state for exercise name
+    const [exerciseName, setExerciseName] = useState(exercise.name || "");
+
+    // Add local state for each set's scheme and weight
+    const [setStates, setSetStates] = useState(
+      (exercise.sets || []).map((set) => ({
+        scheme: set.scheme || "",
+        weight: set.weight || "",
+      }))
+    );
+
+    // Add local state for notes
+    const [notes, setNotes] = useState(exercise.notes || "");
+
+    // Add handler to update exercise in Firestore when input loses focus
+    const handleNameBlur = () => {
+      if (exerciseName !== exercise.name) {
+        handleUpdateExercise(exercise.id, exercise.dayId, "name", exerciseName);
+      }
+    };
+
+    // Handler for updating set values in local state
+    const handleSetValueChange = (setIndex, field, value) => {
+      const newSetStates = [...setStates];
+      newSetStates[setIndex] = {
+        ...newSetStates[setIndex],
+        [field]: value,
+      };
+      setSetStates(newSetStates);
+    };
+
+    // Handler for saving set values to Firestore
+    const handleSetValueBlur = (setIndex, field) => {
+      const value = setStates[setIndex][field];
+      const currentValue = exercise.sets[setIndex][field];
+
+      if (value !== currentValue) {
+        handleUpdateSet(exercise.id, exercise.dayId, setIndex, field, value);
+      }
+    };
+
+    // Handler for saving notes to Firestore
+    const handleNotesBlur = () => {
+      if (notes !== exercise.notes) {
+        handleUpdateExercise(exercise.id, exercise.dayId, "notes", notes);
+      }
+    };
+
     return (
       <View style={styles.exercise}>
         <View style={styles.exerciseContent}>
           <View style={styles.exerciseNameRow}>
             <TextInput
               style={styles.exerciseNameInput}
-              defaultValue={exercise.name}
+              value={exerciseName}
+              onChangeText={setExerciseName}
+              onBlur={handleNameBlur}
               placeholder="Exercise name"
               editable={!isAthlete}
             />
-            <TouchableOpacity style={styles.dragHandle}>
-              <Text style={styles.dragHandleText}>☰</Text>
-            </TouchableOpacity>
+            {!isAthlete && (
+              <TouchableOpacity
+                style={styles.deleteExerciseButton}
+                onPress={() =>
+                  handleDeleteExercise(exercise.id, exercise.dayId)
+                }
+              >
+                <Text style={styles.deleteExerciseText}>-</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {(exercise.sets || []).map((set, setIndex) => (
@@ -251,7 +947,11 @@ const WorkoutProgram = ({ route }) => {
               <View style={styles.setScheme}>
                 <TextInput
                   style={styles.schemeInput}
-                  defaultValue={set.scheme}
+                  value={setStates[setIndex].scheme}
+                  onChangeText={(value) =>
+                    handleSetValueChange(setIndex, "scheme", value)
+                  }
+                  onBlur={() => handleSetValueBlur(setIndex, "scheme")}
                   placeholder="Sets x Reps @ RPE"
                 />
               </View>
@@ -259,7 +959,11 @@ const WorkoutProgram = ({ route }) => {
               <View style={styles.weightInput}>
                 <TextInput
                   style={styles.weightTextInput}
-                  defaultValue={set.weight}
+                  value={setStates[setIndex].weight}
+                  onChangeText={(value) =>
+                    handleSetValueChange(setIndex, "weight", value)
+                  }
+                  onBlur={() => handleSetValueBlur(setIndex, "weight")}
                   keyboardType="numeric"
                   placeholder="0"
                 />
@@ -277,7 +981,7 @@ const WorkoutProgram = ({ route }) => {
 
           <TouchableOpacity
             style={styles.addSetButton}
-            onPress={() => handleAddSet(weekIndex, dayIndex, index)}
+            onPress={() => handleAddSet(exercise.id, exercise.dayId)}
           >
             <Text style={styles.addSetButtonText}>+ Add Set</Text>
           </TouchableOpacity>
@@ -286,7 +990,9 @@ const WorkoutProgram = ({ route }) => {
             <Text style={styles.noteLabel}>Notes:</Text>
             <TextInput
               style={styles.noteInput}
-              defaultValue={exercise.notes}
+              value={notes}
+              onChangeText={setNotes}
+              onBlur={handleNotesBlur}
               placeholder="Add notes here"
               multiline
             />
@@ -311,53 +1017,48 @@ const WorkoutProgram = ({ route }) => {
     setIsRenameModalVisible(false);
   };
 
-  const handleSubmitProgram = async () => {
-    if (isAthlete) return;
-    
-    try {
-      setIsSaving(true);
-      
-      // Update the block with current changes
-      const updatedBlock = {
-        ...block,
-        weeks: blockWeeks,
-        lastUpdated: new Date().toISOString()
-      };
+  // Render loading state while data is being fetched
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#000" />
+        <Text style={styles.loadingText}>Loading workout program...</Text>
+      </View>
+    );
+  }
 
-      // Create batch write to ensure atomicity
-      const batch = writeBatch(db);
+  // Render empty state if no weeks found
+  if (weeks.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {block?.name || "Workout Program"}
+          </Text>
+        </View>
 
-      // Update athlete's document
-      const athleteRef = doc(db, "users", block.athleteId);
-      batch.update(athleteRef, {
-        activeBlocks: arrayRemove(block),
-        'activeBlocks': arrayUnion(updatedBlock)
-      });
+        <View style={styles.emptyStateContainer}>
+          <Text style={styles.emptyStateText}>No workout weeks found</Text>
+          {!isAthlete && (
+            <TouchableOpacity
+              style={styles.createWeekButton}
+              onPress={() => handleAddWeek()}
+            >
+              <Text style={styles.createWeekButtonText}>Create First Week</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  }
 
-      // Update the block in blocks collection
-      const blockRef = doc(db, "blocks", block.id);
-      batch.set(blockRef, updatedBlock);
-
-      // Commit the batch
-      await batch.commit();
-
-      // Update local state in ClientDetails by calling the callback
-      if (route.params.onUpdateBlock) {
-        route.params.onUpdateBlock(updatedBlock);
-      }
-
-      Alert.alert(
-        "Success",
-        "Program has been updated and sent to athlete",
-        [{ text: "OK", onPress: () => navigation.goBack() }]
-      );
-    } catch (error) {
-      console.error("Error submitting program:", error);
-      Alert.alert("Error", "Failed to submit program");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  const weeksToRender = Array(Math.min(totalWeeks, weeks.length)).fill(null);
 
   return (
     <View style={styles.container}>
@@ -377,64 +1078,74 @@ const WorkoutProgram = ({ route }) => {
           {!isAthlete && (
             <TouchableOpacity
               style={styles.submitButton}
-              onPress={handleSubmitProgram}
-              disabled={isSaving}
+              onPress={() =>
+                navigation.navigate("SendProgram", { blockId: blockId })
+              }
             >
-              <Text style={styles.submitButtonText}>
-                {isSaving ? "Saving..." : "Submit"}
-              </Text>
+              <Text style={styles.submitButtonText}>Send to Athlete</Text>
             </TouchableOpacity>
           )}
         </View>
         <View style={styles.weekHeader}>
           <Text style={styles.subtitle}>
-            {block.startDate} - {block.endDate}
+            {formatTimestamp(safelyAccessProperty(block, "startDate"))} -{" "}
+            {formatTimestamp(safelyAccessProperty(block, "endDate"))}
           </Text>
         </View>
         <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.primaryButton]}
-            onPress={handleCopyWeek}
-          >
-            <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
-              Duplicate Week
-            </Text>
-          </TouchableOpacity>
+          {!isAthlete && (
+            <>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.primaryButton]}
+                onPress={handleCopyWeek}
+              >
+                <Text
+                  style={[styles.actionButtonText, styles.primaryButtonText]}
+                >
+                  Duplicate Week
+                </Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={handleDeleteWeek}
-            disabled={totalWeeks === 1}
-          >
-            <Text
-              style={[
-                styles.actionButtonText,
-                styles.deleteButtonText,
-                totalWeeks === 1 && styles.disabledButtonText,
-              ]}
-            >
-              Delete
-            </Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.deleteButton]}
+                onPress={handleDeleteWeek}
+                disabled={totalWeeks === 1}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    styles.deleteButtonText,
+                    totalWeeks === 1 && styles.disabledButtonText,
+                  ]}
+                >
+                  Delete
+                </Text>
+              </TouchableOpacity>
 
-          {isPreviousBlock ? (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.primaryButton]}
-              onPress={handleReopenBlock}
-            >
-              <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
-                Reopen Block
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.actionButton, styles.closeButton]}
-              onPress={handleCloseBlock}
-            >
-              <Text style={[styles.actionButtonText, styles.closeButtonText]}>
-                Close
-              </Text>
-            </TouchableOpacity>
+              {isPreviousBlock ? (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.primaryButton]}
+                  onPress={handleReopenBlock}
+                >
+                  <Text
+                    style={[styles.actionButtonText, styles.primaryButtonText]}
+                  >
+                    Reopen Block
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.closeButton]}
+                  onPress={handleCloseBlock}
+                >
+                  <Text
+                    style={[styles.actionButtonText, styles.closeButtonText]}
+                  >
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       </View>
@@ -447,117 +1158,63 @@ const WorkoutProgram = ({ route }) => {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        {weeks.map((_, weekIndex) => (
+        {weeksToRender.map((_, weekIndex) => (
           <ScrollView
             key={weekIndex}
             style={[styles.programContainer, { width }]}
           >
-            {blockWeeks
-              ? // For existing blocks with data
-                blockWeeks[weekIndex].exercises.map((day, dayIndex) => (
-                  <View
-                    key={dayIndex}
-                    style={[
-                      styles.daySection,
-                      dayIndex === 0 && styles.firstDaySection,
-                    ]}
-                  >
-                    <View style={styles.dayHeader}>
-                      <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
-                      {!isAthlete && (
-                        <TouchableOpacity
-                          style={styles.addExerciseButton}
-                          onPress={() => handleAddExercise(weekIndex, dayIndex)}
-                        >
-                          <Text style={styles.addExerciseIcon}>+</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <View style={styles.exercisesContainer}>
-                      {day.exercises.map((exercise, index) => (
-                        <ExerciseItem
-                          key={index}
-                          exercise={exercise}
-                          index={index}
-                          weekIndex={weekIndex}
-                          dayIndex={dayIndex}
-                        />
-                      ))}
-                    </View>
+            {weeks[weekIndex] &&
+              days[weeks[weekIndex].id] &&
+              days[weeks[weekIndex].id].map((day, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.daySection,
+                    index === 0 && styles.firstDaySection,
+                  ]}
+                >
+                  <View style={styles.dayHeader}>
+                    <Text style={styles.dayTitle}>Day {index + 1}</Text>
                     {!isAthlete && (
                       <TouchableOpacity
-                        style={styles.bottomAddExerciseButton}
-                        onPress={() => handleAddExercise(weekIndex, dayIndex)}
+                        style={styles.addExerciseButton}
+                        onPress={() =>
+                          handleAddExercise(weeks[weekIndex].id, day.id)
+                        }
                       >
-                        <View style={styles.bottomAddExerciseContent}>
-                          <Icon name="add-outline" size={20} color="#666" />
-                          <Text style={styles.bottomAddExerciseText}>
-                            Add Exercise
-                          </Text>
-                        </View>
+                        <Text style={styles.addExerciseIcon}>+</Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                ))
-              : // For new blocks without data
-                Array(block.sessionsPerWeek)
-                  .fill(null)
-                  .map((_, dayIndex) => (
-                    <View
-                      key={dayIndex}
-                      style={[
-                        styles.daySection,
-                        dayIndex === 0 && styles.firstDaySection,
-                      ]}
-                    >
-                      <View style={styles.dayHeader}>
-                        <Text style={styles.dayTitle}>Day {dayIndex + 1}</Text>
-                        {!isAthlete && (
-                          <TouchableOpacity
-                            style={styles.addExerciseButton}
-                            onPress={() =>
-                              handleAddExercise(currentWeek - 1, dayIndex)
-                            }
-                          >
-                            <Text style={styles.addExerciseIcon}>+</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      <View style={styles.exercisesContainer}>
+                  <View style={styles.exercisesContainer}>
+                    {exercises[day.id] &&
+                      exercises[day.id].map((exercise, exIndex) => (
                         <ExerciseItem
-                          exercise={{
-                            name: "",
-                            sets: [
-                              {
-                                scheme: "",
-                                weight: "0",
-                                setCount: "1",
-                              },
-                            ],
-                            notes: "",
-                          }}
-                          index={0}
-                          weekIndex={currentWeek - 1}
-                          dayIndex={dayIndex}
+                          key={exIndex}
+                          exercise={exercise}
+                          index={exIndex}
+                          weekIndex={weekIndex}
+                          dayIndex={index}
                         />
+                      ))}
+                  </View>
+                  {!isAthlete && (
+                    <TouchableOpacity
+                      style={styles.bottomAddExerciseButton}
+                      onPress={() =>
+                        handleAddExercise(weeks[weekIndex].id, day.id)
+                      }
+                    >
+                      <View style={styles.bottomAddExerciseContent}>
+                        <Icon name="add-outline" size={20} color="#666" />
+                        <Text style={styles.bottomAddExerciseText}>
+                          Add Exercise
+                        </Text>
                       </View>
-                      {!isAthlete && (
-                        <TouchableOpacity
-                          style={styles.bottomAddExerciseButton}
-                          onPress={() =>
-                            handleAddExercise(currentWeek - 1, dayIndex)
-                          }
-                        >
-                          <View style={styles.bottomAddExerciseContent}>
-                            <Icon name="add-outline" size={20} color="#666" />
-                            <Text style={styles.bottomAddExerciseText}>
-                              Add Exercise
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  ))}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
           </ScrollView>
         ))}
       </ScrollView>
@@ -662,27 +1319,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    paddingTop: 120,
-    paddingBottom: 90,
+    paddingTop: 80,
+    paddingBottom: 0,
   },
   headerContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 12,
   },
   backButton: {
-    marginTop: -60,
-    marginBottom: 40,
+    marginTop: -40,
+    marginBottom: 20,
     position: "absolute",
     left: 0,
-    top: -20,
+    top: -15,
   },
   backButtonText: {
-    fontSize: 28,
+    fontSize: 24,
     color: "#000",
   },
   titleContainer: {
@@ -691,31 +1348,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
   },
   weekHeader: {
-    marginBottom: 32,
+    marginBottom: 16,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 13,
     color: "#666",
-    marginTop: 6,
+    marginTop: 4,
   },
   programContainer: {
     flex: 1,
     width: width,
-    paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 44,
   },
   daySection: {
-    marginBottom: 24,
-    paddingTop: 24,
-    borderTopWidth: 2,
+    marginBottom: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
     borderTopColor: "#eaeaea",
     backgroundColor: "#fff",
-    marginHorizontal: -24,
-    paddingHorizontal: 24,
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+    alignItems: "center",
   },
   firstDaySection: {
     paddingTop: 0,
@@ -726,90 +1385,92 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
     paddingHorizontal: 4,
+    width: "100%",
   },
   dayTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: "#000",
     letterSpacing: 0.3,
   },
   addExerciseButton: {
-    padding: 4,
+    padding: 2,
   },
   addExerciseIcon: {
-    fontSize: 24,
+    fontSize: 20,
     color: "#000",
     fontWeight: "300",
   },
   exercisesContainer: {
-    borderRadius: 16,
+    borderRadius: 12,
+    width: "100%",
+    alignItems: "center",
   },
   exercise: {
-    marginBottom: 16,
+    marginBottom: 10,
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#f0f0f0",
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 1,
     },
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 4,
+    elevation: 2,
+    width: "85%",
+    alignSelf: "center",
   },
   exerciseContent: {
     flex: 1,
-    padding: 12,
+    padding: 8,
   },
   exerciseNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   exerciseNameInput: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "600",
     color: "#000",
     padding: 0,
+    maxWidth: "88%",
   },
-  dragHandle: {
-    width: 40,
-    height: 40,
+  deleteExerciseButton: {
+    width: 24,
+    height: 24,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 8,
+    marginLeft: 4,
+    padding: 4,
   },
-  dragHandleText: {
-    fontSize: 24,
-    color: "#000",
+  deleteExerciseText: {
+    fontSize: 22,
     fontWeight: "bold",
-  },
-  exerciseDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
+    color: "#000",
+    lineHeight: 22,
   },
   setRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
+    gap: 4,
+    marginBottom: 4,
   },
   setScheme: {
     flex: 1,
     borderWidth: 1,
     borderColor: "#f0f0f0",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
   },
   schemeInput: {
-    fontSize: 15,
+    fontSize: 13,
     color: "#000",
     fontWeight: "500",
     padding: 0,
@@ -817,74 +1478,81 @@ const styles = StyleSheet.create({
   weightInput: {
     borderWidth: 1,
     borderColor: "#f0f0f0",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     flexDirection: "row",
     alignItems: "center",
-    minWidth: 90,
+    minWidth: 80,
   },
   weightTextInput: {
-    fontSize: 15,
+    fontSize: 13,
     color: "#000",
     fontWeight: "500",
     padding: 0,
-    minWidth: 40,
+    minWidth: 30,
     textAlign: "right",
   },
   weightUnitButton: {
-    paddingLeft: 4,
+    paddingLeft: 2,
     paddingVertical: 2,
   },
   weightUnit: {
-    fontSize: 15,
+    fontSize: 13,
     color: "#666",
     fontWeight: "500",
   },
   noteContainer: {
-    marginTop: 10,
-    paddingTop: 10,
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
   },
   noteLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#666",
-    marginBottom: 2,
+    marginBottom: 1,
     fontWeight: "500",
   },
   noteInput: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#000",
-    lineHeight: 18,
+    lineHeight: 16,
     padding: 0,
   },
   weekNavigation: {
-    paddingVertical: 16,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 4,
+    height: 40,
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
     backgroundColor: "#fff",
+    zIndex: 10,
   },
   weekNavigationContent: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: 16,
+    paddingRight: 12,
   },
   weeksContainer: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: 12,
+    gap: 6,
     flexDirection: "row",
     flexGrow: 1,
   },
   weekButtonWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 2,
+    height: 30,
   },
   weekButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     backgroundColor: "#f8f8f8",
     borderWidth: 1,
     borderColor: "#f0f0f0",
@@ -894,7 +1562,7 @@ const styles = StyleSheet.create({
     borderColor: "#000",
   },
   weekButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
     color: "#666",
   },
@@ -903,29 +1571,29 @@ const styles = StyleSheet.create({
   },
   actionsContainer: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-    marginBottom: 16,
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 12,
     paddingHorizontal: 4,
   },
   actionButton: {
     flex: 1,
-    height: 36,
+    height: 32,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 1,
     },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   actionButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
     letterSpacing: 0.3,
   },
@@ -956,7 +1624,7 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   renameButton: {
-    padding: 4,
+    padding: 2,
     opacity: 0.6,
   },
   modalOverlay: {
@@ -968,34 +1636,34 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: "#fff",
     borderRadius: 12,
-    padding: 24,
+    padding: 20,
     width: "80%",
     maxWidth: 400,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
-    marginBottom: 16,
+    marginBottom: 12,
     color: "#000",
   },
   modalInput: {
     borderWidth: 1,
     borderColor: "#e0e0e0",
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 24,
+    padding: 10,
+    fontSize: 14,
+    marginBottom: 20,
   },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 12,
+    gap: 10,
   },
   modalButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    minWidth: 80,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    minWidth: 70,
     alignItems: "center",
   },
   cancelButton: {
@@ -1006,47 +1674,71 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: "#666",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
   },
   saveButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
   },
   addWeekButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: "#f8f8f8",
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 8,
+    marginLeft: 4,
     borderWidth: 1,
     borderColor: "#f0f0f0",
   },
   addSetButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
     backgroundColor: "#f8f8f8",
     alignSelf: "flex-start",
     marginTop: 2,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   addSetButtonText: {
-    fontSize: 13,
+    fontSize: 11,
     color: "#666",
     fontWeight: "600",
   },
   bottomAddExerciseButton: {
     backgroundColor: "#f8f8f8",
-    padding: 14,
-    borderRadius: 12,
-    marginTop: 20,
-    marginHorizontal: 16,
+    padding: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 4,
     borderWidth: 1,
     borderColor: "#f0f0f0",
+    shadowOpacity: 0,
+    width: "70%",
+    alignSelf: "center",
+  },
+  bottomAddExerciseContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  bottomAddExerciseText: {
+    color: "#666",
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  submitButton: {
+    position: "absolute",
+    right: 0,
+    top: -8,
+    backgroundColor: "#000",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -1056,39 +1748,42 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  bottomAddExerciseContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  bottomAddExerciseText: {
-    color: "#666",
-    fontSize: 15,
-    fontWeight: "600",
-    letterSpacing: 0.3,
-  },
-  submitButton: {
-    position: 'absolute',
-    right: 0,
-    top: -10,
-    backgroundColor: '#000',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
   submitButtonText: {
-    color: '#fff',
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
     fontSize: 14,
-    fontWeight: '600',
+    color: "#666",
+    marginTop: 10,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 16,
+  },
+  createWeekButton: {
+    backgroundColor: "#f8f8f8",
+    padding: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  createWeekButtonText: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#000",
   },
 });
 

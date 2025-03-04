@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isCoach() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach';
+    }
+    
+    function isAthleteCoach(athleteId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(athleteId)).data.coachId == request.auth.uid;
+    }
+
+    function isRequestUpdate() {
+      let allowedFields = ['pendingRequests', 'sentRequests', 'coachRequests', 'athletes', 'coachId', 'status', 'activeBlocks', 'previousBlocks', 'workoutLogs'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(allowedFields);
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if 
+        request.auth.uid == userId || 
+        isCoach() ||
+        (isAuthenticated() && isRequestUpdate());
+    }
+
+    // Blocks collection
+    match /blocks/{blockId} {
+      allow read, list: if isAuthenticated();
+
+      allow create: if isAuthenticated() && 
+                     (request.resource.data.coachId == request.auth.uid || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach');
+                      
+      allow update: if isAuthenticated() && (
+        request.resource.data.coachId == request.auth.uid ||
+        request.auth.uid == resource.data.coachId ||
+        (request.auth.uid == request.resource.data.athleteId && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+      );
+      
+      allow delete: if isAuthenticated() && 
+                     (resource.data.coachId == request.auth.uid || 
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach');
+    }
+
+    // Weeks collection
+    match /weeks/{weekId} {
+      allow read: if isAuthenticated();
+      
+      allow create, update: if isAuthenticated() && 
+                             (request.resource.data.blockId is string && 
+                              (get(/databases/$(database)/documents/blocks/$(request.resource.data.blockId)).data.coachId == request.auth.uid || 
+                               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach'));
+      
+      allow delete: if isAuthenticated() && 
+                     (resource.data.blockId is string && 
+                      get(/databases/$(database)/documents/blocks/$(resource.data.blockId)).data.coachId == request.auth.uid);
+    }
+
+    // Days collection
+    match /days/{dayId} {
+      allow read: if isAuthenticated();
+      
+      allow create, update: if isAuthenticated() && 
+                             (request.resource.data.weekId is string && 
+                              get(/databases/$(database)/documents/weeks/$(request.resource.data.weekId)).data.blockId is string && 
+                              get(/databases/$(database)/documents/blocks/$(get(/databases/$(database)/documents/weeks/$(request.resource.data.weekId)).data.blockId)).data.coachId == request.auth.uid);
+      
+      allow delete: if isAuthenticated() && 
+                     (resource.data.weekId is string && 
+                      get(/databases/$(database)/documents/weeks/$(resource.data.weekId)).data.blockId is string && 
+                      get(/databases/$(database)/documents/blocks/$(get(/databases/$(database)/documents/weeks/$(resource.data.weekId)).data.blockId)).data.coachId == request.auth.uid);
+    }
+
+    // Exercises collection
+    match /exercises/{exerciseId} {
+      allow read: if isAuthenticated();
+      
+      allow create, update: if isAuthenticated();
+      
+      allow delete: if isAuthenticated();
+    }
+
+    // Logged weights collection
+    match /logged_weights/{logId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.athleteId ||
+        (isCoach() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.athletes.hasAny([resource.data.athleteId]))
+      );
+      
+      allow create: if isAuthenticated() && 
+        request.resource.data.athleteId == request.auth.uid;
+        
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.athleteId;
+      
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.athleteId;
+    }
+
+    // Analytics collection
+    match /analytics/{docId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == docId ||
+        (isCoach() && exists(/databases/$(database)/documents/users/$(docId)) && 
+         get(/databases/$(database)/documents/users/$(docId)).data.coachId == request.auth.uid)
+      );
+      
+      allow write: if isAuthenticated() && request.auth.uid == docId;
+    }
+
+    // WorkoutLogs collection - keeping your existing rule
+    match /workoutLogs/{logId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.athleteId ||
+        (isCoach() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.athletes.hasAny([resource.data.athleteId]))
+      );
+      allow create: if isAuthenticated() && 
+        request.resource.data.athleteId == request.auth.uid &&
+        request.resource.data.weight is number &&
+        request.resource.data.timestamp == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+} 

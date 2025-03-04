@@ -41,8 +41,56 @@ const AthleteHome = () => {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           const data = userDoc.data();
           setUserData(data);
-          setActiveBlocks(data.activeBlocks || []);
-          setPreviousBlocks(data.previousBlocks || []);
+
+          // Instead of using data.activeBlocks directly,
+          // we'll fetch blocks from the blocks collection
+          const blocksQuery = query(
+            collection(db, "blocks"),
+            where("athleteId", "==", user.uid)
+          );
+
+          const blocksSnapshot = await getDocs(blocksQuery);
+          const activeBlocksData = [];
+          const previousBlocksData = [];
+
+          blocksSnapshot.forEach((doc) => {
+            const blockData = { id: doc.id, ...doc.data() };
+
+            // Format dates for display
+            if (blockData.startDate) {
+              const startDate = blockData.startDate.toDate
+                ? blockData.startDate.toDate()
+                : new Date(blockData.startDate);
+
+              blockData.startDate = startDate.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              });
+            }
+
+            if (blockData.endDate) {
+              const endDate = blockData.endDate.toDate
+                ? blockData.endDate.toDate()
+                : new Date(blockData.endDate);
+
+              blockData.endDate = endDate.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              });
+            }
+
+            // Sort by status
+            if (blockData.status === "active") {
+              activeBlocksData.push(blockData);
+            } else {
+              previousBlocksData.push(blockData);
+            }
+          });
+
+          setActiveBlocks(activeBlocksData);
+          setPreviousBlocks(previousBlocksData);
 
           // Fetch coach data if coachId exists
           if (data.coachId) {
@@ -107,10 +155,10 @@ const AthleteHome = () => {
       style={[styles.blockCard, isPrevious && styles.previousBlock]}
       onPress={() =>
         navigation.navigate("WorkoutProgram", {
-          block,
-          onCloseBlock: () => {}, // Add close block functionality
+          blockId: block.id,
+          onCloseBlock: () => {},
           isPreviousBlock: isPrevious,
-          onReopenBlock: () => {}, // Add reopen block functionality
+          onReopenBlock: () => {},
           isAthlete: true,
         })
       }
