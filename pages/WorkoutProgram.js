@@ -608,6 +608,11 @@ const WorkoutProgram = ({ route }) => {
     }
   };
 
+  const handleSendProgram = () => {
+    // Navigate to the SendProgram screen with the blockId
+    navigation.navigate("SendProgram", { blockId });
+  };
+
   const handleAddExercise = async (weekId, dayId) => {
     try {
       // Create a new exercise
@@ -1042,15 +1047,41 @@ const WorkoutProgram = ({ route }) => {
           >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {block?.name || "Workout Program"}
-          </Text>
-        </View>
-        <View style={styles.weekHeader}>
-          <Text style={styles.subtitle}>
-            {formatTimestamp(safelyAccessProperty(block, "startDate"))} -{" "}
-            {formatTimestamp(safelyAccessProperty(block, "endDate"))}
-          </Text>
+          <View style={styles.titleContainer}>
+            <Text style={styles.headerTitle}>
+              {block?.name || "Workout Program"}
+            </Text>
+            <Text style={styles.subtitle}>
+              {formatTimestamp(safelyAccessProperty(block, "startDate"))} -{" "}
+              {formatTimestamp(safelyAccessProperty(block, "endDate"))}
+            </Text>
+          </View>
+
+          {/* Update Send Program button to be wider */}
+          {!isAthlete && (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.topRightButton,
+                {
+                  backgroundColor: "#000",
+                  width: 120, // Make the button wider
+                },
+              ]}
+              onPress={handleSendProgram}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 12,
+                  fontWeight: "600",
+                  textAlign: "center",
+                }}
+              >
+                Send Program
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.actionsContainer}>
           {!isAthlete && (
@@ -1078,7 +1109,7 @@ const WorkoutProgram = ({ route }) => {
                     totalWeeks === 1 && styles.disabledButtonText,
                   ]}
                 >
-                  Delete
+                  Delete Week
                 </Text>
               </TouchableOpacity>
 
@@ -1318,15 +1349,8 @@ const styles = StyleSheet.create({
   },
   titleContainer: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  weekHeader: {
-    marginBottom: 16,
+    justifyContent: "center",
+    marginLeft: 10,
   },
   subtitle: {
     fontSize: 13,
@@ -1748,6 +1772,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     color: "#000",
+  },
+  sendButton: {
+    backgroundColor: "#4a90e2",
+  },
+  sendButtonText: {
+    color: "#fff",
+  },
+  topRightButton: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });
 

@@ -31,15 +31,45 @@ const formatDate = (date) => {
   // Handle different date formats (Firestore timestamp or JavaScript Date)
   if (!date) return "N/A";
 
-  // Convert Firestore timestamp to JS Date if needed
-  const jsDate = date.toDate ? date.toDate() : new Date(date);
+  try {
+    // Handle different possible date formats
+    let jsDate;
 
-  // Format the date as MM/DD/YYYY
-  return jsDate.toLocaleDateString("en-US", {
-    month: "2-digit",
-    day: "2-digit",
-    year: "numeric",
-  });
+    if (date.toDate) {
+      // Firestore Timestamp
+      jsDate = date.toDate();
+    } else if (date.seconds && date.nanoseconds) {
+      // Firestore Timestamp-like object
+      jsDate = new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
+    } else if (date instanceof Date) {
+      // JavaScript Date object
+      jsDate = date;
+    } else if (typeof date === "string") {
+      // Date string
+      jsDate = new Date(date);
+    } else if (typeof date === "number") {
+      // Timestamp in milliseconds
+      jsDate = new Date(date);
+    } else {
+      // Unknown format
+      return "Invalid date";
+    }
+
+    // Validate the date is valid
+    if (isNaN(jsDate.getTime())) {
+      return "Invalid date";
+    }
+
+    // Format the date as MM/DD/YYYY
+    return jsDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch (error) {
+    console.error("Error formatting date:", error, date);
+    return "Invalid date";
+  }
 };
 
 const ClientDetails = ({ route }) => {
