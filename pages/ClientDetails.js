@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -24,7 +24,23 @@ import {
   where,
   getDocs,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
+
+const formatDate = (date) => {
+  // Handle different date formats (Firestore timestamp or JavaScript Date)
+  if (!date) return "N/A";
+
+  // Convert Firestore timestamp to JS Date if needed
+  const jsDate = date.toDate ? date.toDate() : new Date(date);
+
+  // Format the date as MM/DD/YYYY
+  return jsDate.toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+  });
+};
 
 const ClientDetails = ({ route }) => {
   const navigation = useNavigation();
@@ -721,53 +737,36 @@ const ClientDetails = ({ route }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
   useFocusEffect(
-    React.useCallback(() => {
-      const loadBlocks = async () => {
-        try {
-          console.log("Loading blocks for athlete:", route.params.client.id);
-          const athleteRef = doc(db, "users", route.params.client.id);
-          const athleteDoc = await getDoc(athleteRef);
-          const athleteData = athleteDoc.data();
+    useCallback(() => {
+      console.log("ClientDetails screen focused - refreshing block data");
+      fetchUserBlocks();
 
-          console.log("Athlete data:", athleteData);
-
-          if (athleteData) {
-            const blocks = athleteData.activeBlocks || [];
-            blocks.sort((a, b) => {
-              const dateA = new Date(a.createdAt || 0);
-              const dateB = new Date(b.createdAt || 0);
-              return dateB - dateA;
-            });
-            console.log("Setting active blocks:", blocks);
-            setActiveBlocks(blocks);
-          }
-        } catch (error) {
-          console.error("Error loading blocks:", error);
-          Alert.alert("Error", "Failed to load training blocks");
-        }
+      // Return a cleanup function
+      return () => {
+        // Any cleanup if needed
       };
-
-      loadBlocks();
-    }, [route.params.client.id])
+    }, [route.params.client.id]) // Re-run if client ID changes
   );
 
-  const handleNewBlock = async (blockName, sessionsPerWeek) => {
+  const handleNewBlock = async (
+    blockName,
+    sessionsPerWeek,
+    startDate,
+    endDate
+  ) => {
     try {
       console.log("Creating new block:", blockName);
 
-      // Create new block using our new structure
-      const today = new Date();
-      const endDate = new Date();
-      endDate.setDate(today.getDate() + 28); // 4 weeks from today
-
+      // Create new block using our new structure with user-selected dates
       const newBlock = {
         name: blockName,
         coachId: auth.currentUser.uid,
         athleteId: route.params.client.id,
         status: "active",
         sessionsPerWeek,
-        startDate: today,
-        endDate: endDate,
+        startDate: startDate || new Date(), // Use provided date or today
+        endDate:
+          endDate || new Date(new Date().setDate(new Date().getDate() + 28)), // Use provided date or 4 weeks from today
       };
 
       // Add console log before updating Firebase
@@ -805,7 +804,7 @@ const ClientDetails = ({ route }) => {
         blockId: blockId,
         weekNumber: 1, // Only week 1
         daysPerWeek: sessionsPerWeek,
-        startDate: today,
+        startDate: startDate || new Date(),
         submittedAt: serverTimestamp(),
       });
 
@@ -830,9 +829,10 @@ const ClientDetails = ({ route }) => {
     }
   };
 
-  // Add a new function to fetch blocks from Firestore
   const fetchUserBlocks = async () => {
     try {
+      console.log("Fetching blocks for client:", route.params.client.id);
+
       // Get blocks where athleteId matches the client
       const q = query(
         collection(db, "blocks"),
@@ -846,10 +846,10 @@ const ClientDetails = ({ route }) => {
       querySnapshot.forEach((doc) => {
         const blockData = { id: doc.id, ...doc.data() };
 
-        // Validate block data before adding to the arrays
-        if (!blockData.name) {
-          console.warn("Block missing name:", blockData.id);
-          blockData.name = "Untitled Block"; // Provide a default name
+        // Skip any blocks with missing/invalid data
+        if (!blockData.id || !blockData.name) {
+          console.warn("Skipping invalid block data:", blockData.id);
+          return;
         }
 
         // Format dates for display with error handling
@@ -911,7 +911,7 @@ const ClientDetails = ({ route }) => {
           }
         }
 
-        // Sort by status with clear validation
+        // Sort by status with validation
         if (blockData.status === "active") {
           activeBlocksData.push(blockData);
         } else {
@@ -922,20 +922,28 @@ const ClientDetails = ({ route }) => {
       // Sort blocks by createdAt (newest first)
       activeBlocksData.sort((a, b) => {
         const dateA = a.createdAt
-          ? new Date(a.createdAt.seconds * 1000)
+          ? a.createdAt.seconds
+            ? new Date(a.createdAt.seconds * 1000)
+            : new Date(a.createdAt)
           : new Date(0);
         const dateB = b.createdAt
-          ? new Date(b.createdAt.seconds * 1000)
+          ? b.createdAt.seconds
+            ? new Date(b.createdAt.seconds * 1000)
+            : new Date(b.createdAt)
           : new Date(0);
         return dateB - dateA;
       });
 
       previousBlocksData.sort((a, b) => {
         const dateA = a.createdAt
-          ? new Date(a.createdAt.seconds * 1000)
+          ? a.createdAt.seconds
+            ? new Date(a.createdAt.seconds * 1000)
+            : new Date(a.createdAt)
           : new Date(0);
         const dateB = b.createdAt
-          ? new Date(b.createdAt.seconds * 1000)
+          ? b.createdAt.seconds
+            ? new Date(b.createdAt.seconds * 1000)
+            : new Date(b.createdAt)
           : new Date(0);
         return dateB - dateA;
       });
@@ -952,11 +960,6 @@ const ClientDetails = ({ route }) => {
       Alert.alert("Error", "Failed to load training blocks");
     }
   };
-
-  // Call fetchUserBlocks in useEffect
-  useEffect(() => {
-    fetchUserBlocks();
-  }, [route.params.client.id]);
 
   const handleCloseBlock = async (blockToClose) => {
     try {
@@ -975,66 +978,370 @@ const ClientDetails = ({ route }) => {
         lastUpdated: serverTimestamp(),
       });
 
-      // Use arrayRemove with just the blockId string (not the whole object)
+      // Remove from activeBlocks array
       batch.update(athleteRef, {
         activeBlocks: arrayRemove(blockToClose.id),
       });
-
-      // Add to previousBlocks if needed
-      // This depends on how you're tracking previous blocks in your data model
 
       // Commit the batch
       await batch.commit();
 
       // Update local state
-      // Move block to previous blocks
-      setPreviousBlocks([
-        {
-          ...blockToClose,
-          status: "completed",
-        },
-        ...previousBlocks,
-      ]);
-
-      // Remove from active blocks
-      setActiveBlocks(
-        activeBlocks.filter((block) => block.id !== blockToClose.id)
+      const updatedActiveBlocks = activeBlocks.filter(
+        (block) => block.id !== blockToClose.id
       );
+      setActiveBlocks(updatedActiveBlocks);
+
+      const updatedPreviousBlocks = [
+        ...previousBlocks,
+        { ...blockToClose, status: "completed" },
+      ];
+      setPreviousBlocks(updatedPreviousBlocks);
 
       console.log("Block closed successfully");
+      return true; // Return success indication
     } catch (error) {
       console.error("Error closing block:", error);
-      Alert.alert("Error", "Failed to close block");
+      throw error; // Rethrow to allow caller to catch
     }
   };
 
-  const handleReopenBlock = (blockToReopen) => {
-    // Remove from previous blocks
-    setPreviousBlocks(
-      previousBlocks.filter((block) => block.id !== blockToReopen.id)
-    );
+  const handleReopenBlock = async (blockToReopen) => {
+    try {
+      console.log("Reopening block:", blockToReopen.id);
 
-    // Add to active blocks
-    setActiveBlocks([
-      ...activeBlocks,
-      {
-        ...blockToReopen,
+      // Create batch write
+      const batch = writeBatch(db);
+
+      // Get references
+      const athleteRef = doc(db, "users", route.params.client.id);
+      const blockRef = doc(db, "blocks", blockToReopen.id);
+
+      // Update the block status in Firestore
+      batch.update(blockRef, {
         status: "active",
-      },
-    ]);
+        lastUpdated: serverTimestamp(),
+      });
+
+      // Add to activeBlocks array
+      batch.update(athleteRef, {
+        activeBlocks: arrayUnion(blockToReopen.id),
+      });
+
+      // Commit the batch
+      await batch.commit();
+
+      // Update local state
+      const updatedPreviousBlocks = previousBlocks.filter(
+        (block) => block.id !== blockToReopen.id
+      );
+      setPreviousBlocks(updatedPreviousBlocks);
+
+      const updatedActiveBlocks = [
+        ...activeBlocks,
+        { ...blockToReopen, status: "active" },
+      ];
+      setActiveBlocks(updatedActiveBlocks);
+
+      console.log("Block reopened successfully");
+      return true; // Return success indication
+    } catch (error) {
+      console.error("Error reopening block:", error);
+      throw error; // Rethrow to allow caller to catch
+    }
   };
 
-  const handleDuplicateBlock = (blockToDuplicate) => {
-    const duplicatedBlock = {
-      ...JSON.parse(JSON.stringify(blockToDuplicate)),
-      id: Date.now(), // Generate a new unique ID
-      name: `${blockToDuplicate.name} (Copy)`,
-      startDate: "", // Clear dates as they'll need to be set
-      endDate: "",
-      status: "active",
-    };
+  const handleDuplicateBlock = async (blockToDuplicate) => {
+    if (!blockToDuplicate) {
+      console.warn("No block to duplicate");
+      return;
+    }
 
-    setActiveBlocks([...activeBlocks, duplicatedBlock]);
+    try {
+      console.log("Starting duplication of block:", blockToDuplicate.id);
+
+      // Get the complete block data if we only have a reference
+      let completeBlockData = blockToDuplicate;
+      if (!blockToDuplicate.startDate) {
+        const blockDoc = await getDoc(doc(db, "blocks", blockToDuplicate.id));
+        if (blockDoc.exists()) {
+          completeBlockData = { id: blockDoc.id, ...blockDoc.data() };
+        }
+      }
+
+      // Create a new block document
+      const newBlockRef = doc(collection(db, "blocks"));
+      const newBlockId = newBlockRef.id;
+
+      // Get athlete data to update their activeBlocks array
+      const athleteDoc = await getDoc(doc(db, "users", route.params.client.id));
+      if (!athleteDoc.exists()) {
+        throw new Error("Athlete document not found");
+      }
+
+      // Create a clean copy of the block data, filtering out undefined values
+      // and omitting special fields like id, createdAt, etc.
+      const blockData = {
+        id: newBlockId,
+        name: `${completeBlockData.name || "Block"} (Copy)`,
+        status: "active",
+        athleteId: completeBlockData.athleteId,
+        coachId: completeBlockData.coachId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      // Safely copy additional fields, ensuring no undefined values
+      const fieldsToCopy = [
+        "startDate",
+        "endDate",
+        "notes",
+        "description",
+        "focus",
+        "category",
+        "color",
+        "tags",
+      ];
+
+      fieldsToCopy.forEach((field) => {
+        // Only copy fields that exist and are not undefined
+        if (completeBlockData[field] !== undefined) {
+          blockData[field] = completeBlockData[field];
+        }
+      });
+
+      // Also copy any custom fields not in our known list
+      Object.keys(completeBlockData).forEach((key) => {
+        // Skip fields we've already handled or should not copy
+        if (
+          !["id", "name", "status", "createdAt", "updatedAt", "weeks"].includes(
+            key
+          ) &&
+          !fieldsToCopy.includes(key) &&
+          completeBlockData[key] !== undefined
+        ) {
+          blockData[key] = completeBlockData[key];
+        }
+      });
+
+      console.log("Prepared new block data:", newBlockId);
+
+      // Start batch operation
+      const batch = writeBatch(db);
+
+      // Add new block to Firestore
+      batch.set(newBlockRef, blockData);
+
+      // Update athlete's activeBlocks array
+      let activeBlocks = athleteDoc.data().activeBlocks || [];
+      // Ensure activeBlocks is an array of strings
+      if (activeBlocks.length > 0 && typeof activeBlocks[0] === "object") {
+        activeBlocks = activeBlocks.map((block) => block.id || block);
+      }
+
+      batch.update(doc(db, "users", route.params.client.id), {
+        activeBlocks: [...activeBlocks, newBlockId],
+      });
+
+      // Commit the initial batch
+      await batch.commit();
+      console.log(
+        "Initial block created, now duplicating weeks, days, and exercises"
+      );
+
+      // Fetch original block's weeks
+      const weeksQuery = query(
+        collection(db, "weeks"),
+        where("blockId", "==", blockToDuplicate.id)
+      );
+      const weeksSnapshot = await getDocs(weeksQuery);
+      console.log(`Found ${weeksSnapshot.size} weeks to duplicate`);
+
+      // Map to store old week IDs to new week IDs
+      const weekIdMap = {};
+      const weekBatch = writeBatch(db);
+
+      // Create new weeks for each existing week
+      weeksSnapshot.forEach((weekDoc) => {
+        const originalWeekData = weekDoc.data();
+        const newWeekRef = doc(collection(db, "weeks"));
+        const newWeekId = newWeekRef.id;
+
+        // Store mapping of old week ID to new week ID
+        weekIdMap[weekDoc.id] = newWeekId;
+
+        // Create new week data, filtering out undefined values
+        const newWeekData = {
+          id: newWeekId,
+          blockId: newBlockId,
+          name: originalWeekData.name || `Week`,
+          order:
+            originalWeekData.order !== undefined ? originalWeekData.order : 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        // Safely copy any additional fields
+        Object.keys(originalWeekData).forEach((key) => {
+          if (
+            !["id", "blockId", "createdAt", "updatedAt"].includes(key) &&
+            originalWeekData[key] !== undefined &&
+            newWeekData[key] === undefined
+          ) {
+            newWeekData[key] = originalWeekData[key];
+          }
+        });
+
+        weekBatch.set(newWeekRef, newWeekData);
+      });
+
+      // Commit the weeks batch
+      if (weeksSnapshot.size > 0) {
+        await weekBatch.commit();
+        console.log("Weeks duplicated successfully");
+      }
+
+      // For each week, duplicate its days
+      for (const [oldWeekId, newWeekId] of Object.entries(weekIdMap)) {
+        console.log(`Duplicating days for week ${oldWeekId} -> ${newWeekId}`);
+
+        // Fetch days for the original week
+        const daysQuery = query(
+          collection(db, "days"),
+          where("weekId", "==", oldWeekId)
+        );
+        const daysSnapshot = await getDocs(daysQuery);
+        console.log(`Found ${daysSnapshot.size} days in week ${oldWeekId}`);
+
+        // Map to store old day IDs to new day IDs
+        const dayIdMap = {};
+        const dayBatch = writeBatch(db);
+
+        // Create new days for each existing day
+        daysSnapshot.forEach((dayDoc) => {
+          const originalDayData = dayDoc.data();
+          const newDayRef = doc(collection(db, "days"));
+          const newDayId = newDayRef.id;
+
+          // Store mapping of old day ID to new day ID
+          dayIdMap[dayDoc.id] = newDayId;
+
+          // Create new day data, filtering out undefined values
+          const newDayData = {
+            id: newDayId,
+            weekId: newWeekId,
+            name: originalDayData.name || "Day",
+            order:
+              originalDayData.order !== undefined ? originalDayData.order : 0,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+
+          // Safely copy any additional fields
+          Object.keys(originalDayData).forEach((key) => {
+            if (
+              !["id", "weekId", "createdAt", "updatedAt"].includes(key) &&
+              originalDayData[key] !== undefined &&
+              newDayData[key] === undefined
+            ) {
+              newDayData[key] = originalDayData[key];
+            }
+          });
+
+          dayBatch.set(newDayRef, newDayData);
+        });
+
+        // Commit the days batch
+        if (daysSnapshot.size > 0) {
+          await dayBatch.commit();
+          console.log(`Days for week ${oldWeekId} duplicated successfully`);
+        }
+
+        // For each day, duplicate its exercises
+        for (const [oldDayId, newDayId] of Object.entries(dayIdMap)) {
+          console.log(
+            `Duplicating exercises for day ${oldDayId} -> ${newDayId}`
+          );
+
+          // Fetch exercises for the original day
+          const exercisesQuery = query(
+            collection(db, "exercises"),
+            where("dayId", "==", oldDayId)
+          );
+          const exercisesSnapshot = await getDocs(exercisesQuery);
+          console.log(
+            `Found ${exercisesSnapshot.size} exercises in day ${oldDayId}`
+          );
+
+          if (exercisesSnapshot.size === 0) continue;
+
+          const exerciseBatch = writeBatch(db);
+          let exerciseCount = 0;
+
+          // Create new exercises for each existing exercise
+          exercisesSnapshot.forEach((exerciseDoc) => {
+            const originalExerciseData = exerciseDoc.data();
+            const newExerciseRef = doc(collection(db, "exercises"));
+            const newExerciseId = newExerciseRef.id;
+
+            // Create new exercise data, filtering out undefined values
+            const newExerciseData = {
+              id: newExerciseId,
+              dayId: newDayId,
+              name: originalExerciseData.name || "Exercise",
+              order:
+                originalExerciseData.order !== undefined
+                  ? originalExerciseData.order
+                  : 0,
+              sets: Array.isArray(originalExerciseData.sets)
+                ? originalExerciseData.sets
+                : [],
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            };
+
+            // Safely copy any additional fields
+            Object.keys(originalExerciseData).forEach((key) => {
+              if (
+                !["id", "dayId", "createdAt", "updatedAt"].includes(key) &&
+                originalExerciseData[key] !== undefined &&
+                newExerciseData[key] === undefined
+              ) {
+                newExerciseData[key] = originalExerciseData[key];
+              }
+            });
+
+            exerciseBatch.set(newExerciseRef, newExerciseData);
+            exerciseCount++;
+
+            // Commit in chunks to avoid batch limits
+            if (exerciseCount >= 400) {
+              exerciseBatch.commit();
+              exerciseCount = 0;
+            }
+          });
+
+          // Commit the exercises batch if there are any left
+          if (exerciseCount > 0) {
+            await exerciseBatch.commit();
+            console.log(
+              `Exercises for day ${oldDayId} duplicated successfully`
+            );
+          }
+        }
+      }
+
+      console.log("Block duplication completed successfully");
+
+      // Update local state to show the new block
+      fetchUserBlocks();
+    } catch (error) {
+      console.error("Error duplicating block:", error);
+      Alert.alert(
+        "Error",
+        "Failed to duplicate block: " + (error.message || "Please try again.")
+      );
+    }
   };
 
   const handleRenameBlock = (block) => {
@@ -1081,40 +1388,140 @@ const ClientDetails = ({ route }) => {
 
   const handleDeleteBlock = async (blockId, isActive) => {
     try {
-      // Create batch write
-      const batch = writeBatch(db);
+      console.log(
+        `Deleting ${isActive ? "active" : "previous"} block:`,
+        blockId
+      );
 
-      // Get references
-      const athleteRef = doc(db, "users", route.params.client.id);
-      const blockRef = doc(db, "blocks", blockId);
+      // Step 1: Delete all related data (exercises, days, weeks)
+      // First, get all weeks for this block
+      const weeksQuery = query(
+        collection(db, "weeks"),
+        where("blockId", "==", blockId)
+      );
+      const weeksSnapshot = await getDocs(weeksQuery);
 
-      // Get current block to remove
-      const blockToRemove = activeBlocks.find((block) => block.id === blockId);
+      // Collect all week IDs
+      const weekIds = [];
+      weeksSnapshot.forEach((doc) => {
+        weekIds.push(doc.id);
+      });
 
-      if (isActive) {
-        // Remove from athlete's active blocks
-        batch.update(athleteRef, {
-          activeBlocks: arrayRemove(blockToRemove),
+      // For each week, get and delete days
+      const dayIds = [];
+      for (const weekId of weekIds) {
+        const daysQuery = query(
+          collection(db, "days"),
+          where("weekId", "==", weekId)
+        );
+        const daysSnapshot = await getDocs(daysQuery);
+
+        daysSnapshot.forEach((doc) => {
+          dayIds.push(doc.id);
         });
+      }
 
-        // Delete from blocks collection
-        batch.delete(blockRef);
+      // For each day, get and delete exercises
+      const batch = writeBatch(db);
+      let operationCount = 0;
 
-        // Update local state
+      for (const dayId of dayIds) {
+        const exercisesQuery = query(
+          collection(db, "exercises"),
+          where("dayId", "==", dayId)
+        );
+        const exercisesSnapshot = await getDocs(exercisesQuery);
+
+        exercisesSnapshot.forEach((doc) => {
+          batch.delete(doc.ref);
+          operationCount++;
+
+          // Firebase has a limit of 500 operations per batch
+          if (operationCount >= 450) {
+            batch.commit();
+            batch = writeBatch(db);
+            operationCount = 0;
+          }
+        });
+      }
+
+      // Delete all days
+      for (const dayId of dayIds) {
+        batch.delete(doc(db, "days", dayId));
+        operationCount++;
+
+        if (operationCount >= 450) {
+          batch.commit();
+          batch = writeBatch(db);
+          operationCount = 0;
+        }
+      }
+
+      // Delete all weeks
+      for (const weekId of weekIds) {
+        batch.delete(doc(db, "weeks", weekId));
+        operationCount++;
+
+        if (operationCount >= 450) {
+          batch.commit();
+          batch = writeBatch(db);
+          operationCount = 0;
+        }
+      }
+
+      // Step 2: Delete the block itself
+      batch.delete(doc(db, "blocks", blockId));
+
+      // Step 3: Update the athlete document if it's an active block
+      if (isActive) {
+        const athleteRef = doc(db, "users", route.params.client.id);
+        const athleteDoc = await getDoc(athleteRef);
+        const athleteData = athleteDoc.data();
+
+        if (athleteData && athleteData.activeBlocks) {
+          // Handle both string IDs and object references
+          if (Array.isArray(athleteData.activeBlocks)) {
+            if (athleteData.activeBlocks.includes(blockId)) {
+              batch.update(athleteRef, {
+                activeBlocks: arrayRemove(blockId),
+              });
+            } else {
+              const blockToRemove = athleteData.activeBlocks.find(
+                (b) =>
+                  (typeof b === "object" && b.id === blockId) || b === blockId
+              );
+
+              if (blockToRemove) {
+                batch.update(athleteRef, {
+                  activeBlocks: arrayRemove(blockToRemove),
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Commit any remaining operations
+      await batch.commit();
+      console.log("Block and related data deleted successfully");
+
+      // Update local state
+      if (isActive) {
         setActiveBlocks(activeBlocks.filter((block) => block.id !== blockId));
       } else {
-        // Handle previous blocks if needed
         setPreviousBlocks(
           previousBlocks.filter((block) => block.id !== blockId)
         );
       }
-
-      // Commit the batch
-      await batch.commit();
-      console.log("Block deleted successfully");
     } catch (error) {
       console.error("Error deleting block:", error);
-      Alert.alert("Error", "Failed to delete block");
+      console.error("Error details:", error.code, error.message);
+
+      // More detailed error message
+      Alert.alert(
+        "Error Deleting Block",
+        `Please try again: ${error.message || "Unknown error"}`
+      );
     }
   };
 
@@ -1127,36 +1534,15 @@ const ClientDetails = ({ route }) => {
   };
 
   const renderBlock = (block, isPrevious = false) => {
-    // Format dates if they are Firebase Timestamp objects
-    const formatDate = (dateField) => {
-      if (!dateField) return "";
+    if (!block || !block.id || !block.name) {
+      console.warn("Attempted to render invalid block:", block);
+      return null;
+    }
 
-      // If it's a Firebase Timestamp
-      if (dateField && typeof dateField === "object" && dateField.seconds) {
-        const date = new Date(dateField.seconds * 1000);
-        return date.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-      }
-
-      // If it's already a string
-      if (typeof dateField === "string") {
-        return dateField;
-      }
-
-      // If it's a JavaScript Date object
-      if (dateField instanceof Date) {
-        return dateField.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-      }
-
-      return String(dateField); // Fallback
-    };
+    // Define icon colors based on whether it's a previous block
+    const iconColor = isPrevious ? "#888888" : "#000000"; // Grey for previous, blue for active
+    const deleteIconColor = isPrevious ? "#888888" : "#FF3B30"; // Grey for previous, red for active
+    const statusIconColor = isPrevious ? "#888888" : "#4CD964"; // Grey for previous, green for active
 
     return (
       <TouchableOpacity
@@ -1165,16 +1551,22 @@ const ClientDetails = ({ route }) => {
         onPress={() =>
           navigation.navigate("WorkoutProgram", {
             blockId: block.id,
-            onCloseBlock: handleCloseBlock,
+            onCloseBlock: (blockToClose) => handleCloseBlock(blockToClose),
             isPreviousBlock: isPrevious,
-            onReopenBlock: handleReopenBlock,
+            onReopenBlock: (blockToReopen) => handleReopenBlock(blockToReopen),
             isAthlete: false,
-            onUpdateBlock: handleUpdateBlock,
+            onUpdateBlock: (blockToUpdate) => handleUpdateBlock(blockToUpdate),
           })
         }
       >
         <View style={styles.blockHeader}>
           <View style={styles.blockTitleContainer}>
+            <Icon
+              name="ellipse"
+              size={12}
+              color={statusIconColor}
+              style={styles.statusIcon}
+            />
             <Text style={styles.blockName}>{block.name}</Text>
             <TouchableOpacity
               style={styles.blockRenameButton}
@@ -1183,7 +1575,7 @@ const ClientDetails = ({ route }) => {
                 handleRenameBlock(block);
               }}
             >
-              <Icon name="pencil-outline" size={16} color="#666" />
+              <Icon name="pencil-outline" size={16} color={iconColor} />
             </TouchableOpacity>
           </View>
           <View style={styles.blockActions}>
@@ -1191,20 +1583,17 @@ const ClientDetails = ({ route }) => {
               style={styles.actionButton}
               onPress={(e) => {
                 e.stopPropagation();
-                handleDeleteBlock(block.id, true);
+                handleDeleteBlock(block.id, !isPrevious);
               }}
             >
-              <Icon name="trash-outline" size={18} color="#FF3B30" />
+              <Icon name="trash-outline" size={18} color={deleteIconColor} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.duplicateButton}
               onPress={() => handleDuplicateBlock(block)}
             >
-              <Icon name="copy-outline" size={18} color="#4CAF50" />
+              <Icon name="copy-outline" size={18} color={iconColor} />
             </TouchableOpacity>
-            <View style={styles.statusBadge}>
-              <Icon name="radio-button-on" size={18} color="#4CAF50" />
-            </View>
           </View>
         </View>
         <Text style={styles.dateText}>
@@ -1344,13 +1733,13 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    padding: 40,
-    paddingTop: 100, // Adjusted to account for back button
+    padding: 24,
+    paddingTop: 70,
   },
   backButton: {
     position: "absolute",
-    top: 60,
-    left: 40,
+    top: 40,
+    left: 24,
     zIndex: 1,
   },
   backButtonText: {
@@ -1360,7 +1749,7 @@ const styles = StyleSheet.create({
   clientHeader: {
     marginBottom: 24,
     alignItems: "center",
-    marginTop: 40,
+    marginTop: 20,
   },
   clientInfo: {
     alignItems: "center",
@@ -1437,9 +1826,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
     flex: 1,
   },
-  statusBadge: {
-    padding: 4,
-    opacity: 0.6,
+  statusIcon: {
+    marginRight: 8,
   },
   dateText: {
     color: "#666",
@@ -1560,7 +1948,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   previousBlock: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#F5F5F5", // Light grey background
+    borderColor: "#DDDDDD", // Light grey border
   },
 });
 

@@ -11,7 +11,6 @@ import {
   PanResponder,
   Modal,
   Alert,
-  ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -52,7 +51,6 @@ const WorkoutProgram = ({ route }) => {
   const [days, setDays] = useState({}); // Map of weekId -> array of days
   const [exercises, setExercises] = useState({}); // Map of dayId -> array of exercises
 
-  const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [totalWeeks, setTotalWeeks] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,10 +130,25 @@ const WorkoutProgram = ({ route }) => {
     console.log("TOTAL WEEKS STATE:", totalWeeks);
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      // Make sure all pending changes are saved before navigating away
+      if (isSaving) {
+        // Prevent immediate navigation while saving
+        e.preventDefault();
+
+        // Try again after a short delay
+        setTimeout(() => {
+          navigation.dispatch(e.data.action);
+        }, 500);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, isSaving]);
+
   const fetchBlockData = async () => {
     try {
-      setLoading(true);
-
       // Check if blockId is valid
       if (!blockId) {
         console.error("Invalid blockId:", blockId);
@@ -266,8 +279,6 @@ const WorkoutProgram = ({ route }) => {
       console.error("Error fetching block data:", error);
       Alert.alert("Error", "Failed to load workout program");
       navigation.goBack();
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -280,9 +291,6 @@ const WorkoutProgram = ({ route }) => {
 
   const handleAddWeek = async () => {
     try {
-      // Start loading state
-      setIsSaving(true);
-
       // Create a new week in Firestore
       const weekRef = doc(collection(db, "weeks"));
       const weekId = weekRef.id;
@@ -395,9 +403,6 @@ const WorkoutProgram = ({ route }) => {
 
   const handleCopyWeek = async () => {
     try {
-      // Start loading state
-      setIsSaving(true);
-
       // Check if the current week exists
       if (!weeks[currentWeek - 1]) {
         throw new Error("Cannot copy non-existent week");
@@ -553,39 +558,54 @@ const WorkoutProgram = ({ route }) => {
     }
   };
 
-  const handleReopenBlock = () => {
-    if (typeof onReopenBlock !== "function") {
-      console.warn("onReopenBlock is not a function");
-      navigation.goBack();
-      return;
-    }
-    // Call the callback to update the parent state
-    onReopenBlock(block);
-    // Navigate back to the client details screen
-    navigation.goBack();
-  };
-
-  const handleCloseBlock = () => {
+  const handleCloseBlock = async () => {
     if (typeof onCloseBlock !== "function") {
       console.warn("onCloseBlock is not a function");
       navigation.goBack();
       return;
     }
 
-    // Ensure we have a valid block with ID
-    if (!block || !block.id) {
-      console.error("Cannot close block: Invalid block data");
-      Alert.alert("Error", "Unable to close block");
+    try {
+      // Call the callback from parent
+      await onCloseBlock(block);
+
+      // Immediately update local state to reflect the change
+      setBlock((prevBlock) => ({
+        ...prevBlock,
+        status: "completed",
+      }));
+
+      // Just navigate back without showing the alert
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error in handleCloseBlock:", error);
+      Alert.alert("Error", "Failed to close block. Please try again.");
+    }
+  };
+
+  const handleReopenBlock = async () => {
+    if (typeof onReopenBlock !== "function") {
+      console.warn("onReopenBlock is not a function");
+      navigation.goBack();
       return;
     }
 
-    console.log("Closing block from WorkoutProgram:", block.id);
+    try {
+      // Call the callback from parent
+      await onReopenBlock(block);
 
-    // Call the callback to update the parent state
-    onCloseBlock(block);
+      // Immediately update local state to reflect the change
+      setBlock((prevBlock) => ({
+        ...prevBlock,
+        status: "active",
+      }));
 
-    // Navigate back to the client details screen
-    navigation.goBack();
+      // Just navigate back without showing the alert
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error in handleReopenBlock:", error);
+      Alert.alert("Error", "Failed to reopen block. Please try again.");
+    }
   };
 
   const handleAddExercise = async (weekId, dayId) => {
@@ -825,9 +845,6 @@ const WorkoutProgram = ({ route }) => {
     if (isAthlete) return;
 
     try {
-      setIsSaving(true);
-
-      // Update the block status
       await updateDoc(doc(db, "blocks", blockId), {
         status: "active",
         lastUpdated: serverTimestamp(),
@@ -839,8 +856,6 @@ const WorkoutProgram = ({ route }) => {
     } catch (error) {
       console.error("Error submitting program:", error);
       Alert.alert("Error", "Failed to submit program");
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -1017,49 +1032,6 @@ const WorkoutProgram = ({ route }) => {
     setIsRenameModalVisible(false);
   };
 
-  // Render loading state while data is being fetched
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#000" />
-        <Text style={styles.loadingText}>Loading workout program...</Text>
-      </View>
-    );
-  }
-
-  // Render empty state if no weeks found
-  if (weeks.length === 0) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {block?.name || "Workout Program"}
-          </Text>
-        </View>
-
-        <View style={styles.emptyStateContainer}>
-          <Text style={styles.emptyStateText}>No workout weeks found</Text>
-          {!isAthlete && (
-            <TouchableOpacity
-              style={styles.createWeekButton}
-              onPress={() => handleAddWeek()}
-            >
-              <Text style={styles.createWeekButtonText}>Create First Week</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
-  }
-
-  const weeksToRender = Array(Math.min(totalWeeks, weeks.length)).fill(null);
-
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -1070,21 +1042,9 @@ const WorkoutProgram = ({ route }) => {
           >
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>{block.name}</Text>
-          </View>
-
-          {!isAthlete && (
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={() =>
-                navigation.navigate("SendProgram", { blockId: blockId })
-              }
-            >
-              <Text style={styles.submitButtonText}>Send to Athlete</Text>
-            </TouchableOpacity>
-          )}
+          <Text style={styles.headerTitle}>
+            {block?.name || "Workout Program"}
+          </Text>
         </View>
         <View style={styles.weekHeader}>
           <Text style={styles.subtitle}>
@@ -1122,26 +1082,30 @@ const WorkoutProgram = ({ route }) => {
                 </Text>
               </TouchableOpacity>
 
-              {isPreviousBlock ? (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.primaryButton]}
-                  onPress={handleReopenBlock}
-                >
-                  <Text
-                    style={[styles.actionButtonText, styles.primaryButtonText]}
-                  >
-                    Reopen Block
-                  </Text>
-                </TouchableOpacity>
-              ) : (
+              {block?.status === "active" && !isPreviousBlock && (
                 <TouchableOpacity
                   style={[styles.actionButton, styles.closeButton]}
                   onPress={handleCloseBlock}
+                  disabled={isSaving}
                 >
                   <Text
                     style={[styles.actionButtonText, styles.closeButtonText]}
                   >
-                    Close
+                    {isSaving ? "Closing..." : "Close"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {(block?.status === "completed" || isPreviousBlock) && (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.primaryButton]}
+                  onPress={handleReopenBlock}
+                  disabled={isSaving}
+                >
+                  <Text
+                    style={[styles.actionButtonText, styles.primaryButtonText]}
+                  >
+                    {isSaving ? "Reopening..." : "Reopen Block"}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1158,65 +1122,67 @@ const WorkoutProgram = ({ route }) => {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        {weeksToRender.map((_, weekIndex) => (
-          <ScrollView
-            key={weekIndex}
-            style={[styles.programContainer, { width }]}
-          >
-            {weeks[weekIndex] &&
-              days[weeks[weekIndex].id] &&
-              days[weeks[weekIndex].id].map((day, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.daySection,
-                    index === 0 && styles.firstDaySection,
-                  ]}
-                >
-                  <View style={styles.dayHeader}>
-                    <Text style={styles.dayTitle}>Day {index + 1}</Text>
+        {Array(Math.min(totalWeeks, weeks.length))
+          .fill(null)
+          .map((_, weekIndex) => (
+            <ScrollView
+              key={weekIndex}
+              style={[styles.programContainer, { width }]}
+            >
+              {weeks[weekIndex] &&
+                days[weeks[weekIndex].id] &&
+                days[weeks[weekIndex].id].map((day, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.daySection,
+                      index === 0 && styles.firstDaySection,
+                    ]}
+                  >
+                    <View style={styles.dayHeader}>
+                      <Text style={styles.dayTitle}>Day {index + 1}</Text>
+                      {!isAthlete && (
+                        <TouchableOpacity
+                          style={styles.addExerciseButton}
+                          onPress={() =>
+                            handleAddExercise(weeks[weekIndex].id, day.id)
+                          }
+                        >
+                          <Text style={styles.addExerciseIcon}>+</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <View style={styles.exercisesContainer}>
+                      {exercises[day.id] &&
+                        exercises[day.id].map((exercise, exIndex) => (
+                          <ExerciseItem
+                            key={exIndex}
+                            exercise={exercise}
+                            index={exIndex}
+                            weekIndex={weekIndex}
+                            dayIndex={index}
+                          />
+                        ))}
+                    </View>
                     {!isAthlete && (
                       <TouchableOpacity
-                        style={styles.addExerciseButton}
+                        style={styles.bottomAddExerciseButton}
                         onPress={() =>
                           handleAddExercise(weeks[weekIndex].id, day.id)
                         }
                       >
-                        <Text style={styles.addExerciseIcon}>+</Text>
+                        <View style={styles.bottomAddExerciseContent}>
+                          <Icon name="add-outline" size={20} color="#666" />
+                          <Text style={styles.bottomAddExerciseText}>
+                            Add Exercise
+                          </Text>
+                        </View>
                       </TouchableOpacity>
                     )}
                   </View>
-                  <View style={styles.exercisesContainer}>
-                    {exercises[day.id] &&
-                      exercises[day.id].map((exercise, exIndex) => (
-                        <ExerciseItem
-                          key={exIndex}
-                          exercise={exercise}
-                          index={exIndex}
-                          weekIndex={weekIndex}
-                          dayIndex={index}
-                        />
-                      ))}
-                  </View>
-                  {!isAthlete && (
-                    <TouchableOpacity
-                      style={styles.bottomAddExerciseButton}
-                      onPress={() =>
-                        handleAddExercise(weeks[weekIndex].id, day.id)
-                      }
-                    >
-                      <View style={styles.bottomAddExerciseContent}>
-                        <Icon name="add-outline" size={20} color="#666" />
-                        <Text style={styles.bottomAddExerciseText}>
-                          Add Exercise
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-          </ScrollView>
-        ))}
+                ))}
+            </ScrollView>
+          ))}
       </ScrollView>
 
       <View style={styles.weekNavigation}>
@@ -1330,6 +1296,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#000",
+    marginLeft: 30, // To offset from the back button
+    marginTop: -16,
+    letterSpacing: 0.3,
   },
   backButton: {
     marginTop: -40,
@@ -1752,16 +1726,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontWeight: "600",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 10,
   },
   emptyStateContainer: {
     flex: 1,
