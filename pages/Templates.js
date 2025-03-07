@@ -243,7 +243,7 @@ const Templates = ({ route }) => {
     if (selectedTemplate) {
       try {
         setIsDateSelectionModalVisible(false);
-        setIsLoading(true);
+      setIsLoading(true);
         await createBlockFromTemplate(selectedTemplate, startDate, endDate);
 
         // Add a small delay before navigation to ensure all operations complete
@@ -276,8 +276,8 @@ const Templates = ({ route }) => {
       const client = clientDoc.data();
 
       // Create a new block based on the template
-      const blockRef = doc(collection(db, "blocks"));
-      const blockId = blockRef.id;
+        const blockRef = doc(collection(db, "blocks"));
+        const blockId = blockRef.id;
 
       // Convert dates to proper format for Firestore
       const formattedStartDate = {
@@ -290,24 +290,24 @@ const Templates = ({ route }) => {
         nanoseconds: 0,
       };
 
-      await setDoc(blockRef, {
-        id: blockId,
+        await setDoc(blockRef, {
+          id: blockId,
         name: template.name,
-        coachId: auth.currentUser.uid,
-        athleteId: clientId,
-        status: "active",
+          coachId: auth.currentUser.uid,
+          athleteId: clientId,
+          status: "active",
         sessionsPerWeek: template.daysPerWeek || 3,
         startDate: formattedStartDate,
         endDate: formattedEndDate,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         fromTemplate: template.id,
-      });
+        });
 
-      // Update athlete's document to add the block
-      await updateDoc(doc(db, "users", clientId), {
-        activeBlocks: arrayUnion(blockId),
-      });
+        // Update athlete's document to add the block
+        await updateDoc(doc(db, "users", clientId), {
+          activeBlocks: arrayUnion(blockId),
+        });
 
       // Get the template weeks
       const weeksQuery = query(
@@ -322,23 +322,23 @@ const Templates = ({ route }) => {
 
       // Create weeks for the new block
       for (const templateWeek of filteredWeeks) {
-        const weekRef = doc(collection(db, "weeks"));
-        const weekId = weekRef.id;
+          const weekRef = doc(collection(db, "weeks"));
+          const weekId = weekRef.id;
 
-        await setDoc(weekRef, {
-          id: weekId,
-          blockId: blockId,
-          weekNumber: templateWeek.weekNumber,
+          await setDoc(weekRef, {
+            id: weekId,
+            blockId: blockId,
+            weekNumber: templateWeek.weekNumber,
           name: templateWeek.name || `Week ${templateWeek.weekNumber}`,
           createdAt: serverTimestamp(),
-        });
+          });
 
         // Get days for this template week
-        const daysQuery = query(
-          collection(db, "templateDays"),
-          where("weekId", "==", templateWeek.id)
-        );
-        const daysSnapshot = await getDocs(daysQuery);
+          const daysQuery = query(
+            collection(db, "templateDays"),
+            where("weekId", "==", templateWeek.id)
+          );
+          const daysSnapshot = await getDocs(daysQuery);
         const daysData = daysSnapshot.docs.map((doc) => doc.data());
 
         // Filter out deleted days
@@ -346,22 +346,22 @@ const Templates = ({ route }) => {
 
         // Create days for this week
         for (const templateDay of filteredDays) {
-          const dayRef = doc(collection(db, "days"));
-          const dayId = dayRef.id;
+            const dayRef = doc(collection(db, "days"));
+            const dayId = dayRef.id;
 
-          await setDoc(dayRef, {
-            id: dayId,
-            weekId: weekId,
-            dayNumber: templateDay.dayNumber,
+            await setDoc(dayRef, {
+              id: dayId,
+              weekId: weekId,
+              dayNumber: templateDay.dayNumber,
             createdAt: serverTimestamp(),
-          });
+            });
 
           // Get exercises for this template day
-          const exercisesQuery = query(
-            collection(db, "templateExercises"),
-            where("dayId", "==", templateDay.id)
-          );
-          const exercisesSnapshot = await getDocs(exercisesQuery);
+            const exercisesQuery = query(
+              collection(db, "templateExercises"),
+              where("dayId", "==", templateDay.id)
+            );
+            const exercisesSnapshot = await getDocs(exercisesQuery);
           const exercisesData = exercisesSnapshot.docs.map((doc) => doc.data());
 
           // Filter out deleted exercises
@@ -371,21 +371,21 @@ const Templates = ({ route }) => {
 
           // Create exercises for this day
           for (const templateExercise of filteredExercises) {
-            const exerciseRef = doc(collection(db, "exercises"));
+              const exerciseRef = doc(collection(db, "exercises"));
             const exerciseId = exerciseRef.id;
 
-            await setDoc(exerciseRef, {
+              await setDoc(exerciseRef, {
               id: exerciseId,
-              dayId: dayId,
-              name: templateExercise.name,
-              notes: templateExercise.notes || "",
+                dayId: dayId,
+                name: templateExercise.name,
+                notes: templateExercise.notes || "",
               sets: templateExercise.sets || [],
-              order: templateExercise.order || 0,
+                order: templateExercise.order || 0,
               createdAt: serverTimestamp(),
-            });
+              });
+            }
           }
         }
-      }
 
       // Don't navigate here - navigation will happen in confirmDatesAndCreateBlock
       // after a short delay to ensure all operations complete
@@ -436,7 +436,7 @@ const Templates = ({ route }) => {
         setIsRenameModalVisible(false);
       } catch (error) {
         console.error("Error updating template name:", error);
-        Alert.alert(
+      Alert.alert(
           "Error",
           "Failed to update template name. Please try again."
         );
@@ -581,25 +581,25 @@ const Templates = ({ route }) => {
 
   // Update the renderTemplateItem function to add rename and duplicate buttons
   const renderTemplateItem = ({ item }) => (
-    <TouchableOpacity
+        <TouchableOpacity
       style={styles.templateCard}
       onPress={() => {
         if (selectMode) {
           handleSelectTemplate(item);
         } else {
-          navigation.navigate("EditTemplate", {
-            templateId: item.id,
-            templateName: item.name,
+            navigation.navigate("EditTemplate", {
+              templateId: item.id,
+              templateName: item.name,
           });
-        }
+          }
       }}
-    >
+        >
       <View style={styles.templateHeader}>
         <Text style={styles.templateName}>{item.name}</Text>
 
         {!selectMode && (
           <View style={styles.templateActions}>
-            <TouchableOpacity
+        <TouchableOpacity
               style={styles.templateActionButton}
               onPress={(e) => {
                 e.stopPropagation(); // Prevent the card click from firing
@@ -607,8 +607,8 @@ const Templates = ({ route }) => {
               }}
             >
               <Icon name="pencil-outline" size={16} color="#000" />
-            </TouchableOpacity>
-            <TouchableOpacity
+        </TouchableOpacity>
+        <TouchableOpacity
               style={styles.templateActionButton}
               onPress={(e) => {
                 e.stopPropagation(); // Prevent the card click from firing
@@ -616,8 +616,8 @@ const Templates = ({ route }) => {
               }}
             >
               <Icon name="copy-outline" size={18} color="#000" />
-            </TouchableOpacity>
-            <TouchableOpacity
+        </TouchableOpacity>
+    <TouchableOpacity
               style={styles.templateActionButton}
               onPress={(e) => {
                 e.stopPropagation(); // Prevent the card click from firing
@@ -626,9 +626,9 @@ const Templates = ({ route }) => {
             >
               <Icon name="trash-outline" size={18} color="#FF3B30" />
             </TouchableOpacity>
-          </View>
+        </View>
         )}
-      </View>
+        </View>
     </TouchableOpacity>
   );
 
@@ -648,12 +648,12 @@ const Templates = ({ route }) => {
       </View>
 
       {!selectMode && (
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => setIsCreateModalVisible(true)}
-        >
-          <Text style={styles.createButtonText}>Create New Template</Text>
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.createButton}
+        onPress={() => setIsCreateModalVisible(true)}
+      >
+        <Text style={styles.createButtonText}>Create New Template</Text>
+      </TouchableOpacity>
       )}
 
       {templates.length > 0 ? (
@@ -765,7 +765,7 @@ const Templates = ({ route }) => {
               >
                 <Text style={styles.confirmButtonText}>
                   {isLoading ? "Saving..." : "Save"}
-                </Text>
+            </Text>
               </TouchableOpacity>
             </View>
           </View>

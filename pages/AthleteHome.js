@@ -86,29 +86,62 @@ const AthleteHome = () => {
         blocksSnapshot.forEach((doc) => {
           const blockData = { id: doc.id, ...doc.data() };
 
-          // Format dates for display
-          if (blockData.startDate) {
-            const startDate = blockData.startDate.toDate
-              ? blockData.startDate.toDate()
-              : new Date(blockData.startDate);
+          // Format dates for display with better error handling
+          try {
+            if (blockData.startDate) {
+              // Handle Firestore timestamp format
+              if (blockData.startDate.seconds) {
+                const startDateObj = new Date(blockData.startDate.seconds * 1000);
+                blockData.startDate = formatDate(startDateObj);
+              } 
+              // Handle Date object
+              else if (blockData.startDate instanceof Date) {
+                blockData.startDate = formatDate(blockData.startDate);
+              }
+              // Handle Firestore toDate() function
+              else if (typeof blockData.startDate.toDate === 'function') {
+                blockData.startDate = formatDate(blockData.startDate.toDate());
+              }
+              // Handle string date that's already formatted
+              else if (typeof blockData.startDate === 'string') {
+                // Keep it as is if it's already a string
+              }
+              // Handle all other cases
+              else {
+                console.warn("Unknown startDate format:", blockData.startDate);
+                blockData.startDate = "N/A";
+              }
+            }
 
-            blockData.startDate = startDate.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            });
-          }
-
-          if (blockData.endDate) {
-            const endDate = blockData.endDate.toDate
-              ? blockData.endDate.toDate()
-              : new Date(blockData.endDate);
-
-            blockData.endDate = endDate.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            });
+            if (blockData.endDate) {
+              // Handle Firestore timestamp format
+              if (blockData.endDate.seconds) {
+                const endDateObj = new Date(blockData.endDate.seconds * 1000);
+                blockData.endDate = formatDate(endDateObj);
+              } 
+              // Handle Date object
+              else if (blockData.endDate instanceof Date) {
+                blockData.endDate = formatDate(blockData.endDate);
+              }
+              // Handle Firestore toDate() function
+              else if (typeof blockData.endDate.toDate === 'function') {
+                blockData.endDate = formatDate(blockData.endDate.toDate());
+              }
+              // Handle string date that's already formatted
+              else if (typeof blockData.endDate === 'string') {
+                // Keep it as is if it's already a string
+              }
+              // Handle all other cases
+              else {
+                console.warn("Unknown endDate format:", blockData.endDate);
+                blockData.endDate = "N/A";
+              }
+            }
+          } catch (error) {
+            console.error("Error formatting block dates:", error, blockData);
+            // Provide fallback values
+            blockData.startDate = blockData.startDate ? "N/A" : "";
+            blockData.endDate = blockData.endDate ? "N/A" : "";
           }
 
           // Sort by status
@@ -575,5 +608,28 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 });
+
+// Add a helper function to format dates consistently
+const formatDate = (date) => {
+  if (!date) return "N/A";
+  
+  try {
+    // Validate the date is valid
+    if (!(date instanceof Date) || isNaN(date.getTime())) {
+      console.warn("Invalid date object:", date);
+      return "N/A";
+    }
+
+    // Format the date as MMM DD, YYYY
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch (error) {
+    console.error("Error in formatDate:", error);
+    return "N/A";
+  }
+};
 
 export default AthleteHome;

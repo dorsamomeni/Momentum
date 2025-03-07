@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
+  Dimensions,
 } from "react-native";
 import { useNavigation, CommonActions } from "@react-navigation/native";
 import { signup } from "../src/auth/signup";
@@ -21,6 +25,41 @@ const SignUp = () => {
   const [password, setPassword] = useState("");
   const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
+  const [scrollViewHeight, setScrollViewHeight] = useState(null);
+
+  // References to input fields for handling return key navigation
+  const lastNameRef = useRef(null);
+  const usernameRef = useRef(null);
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        // On Android, ensure the ScrollView knows its maximum height
+        if (Platform.OS === "android" && scrollViewHeight) {
+          const screenHeight = Dimensions.get("window").height;
+          const keyboardHeight = screenHeight * 0.4; // Approximate keyboard height
+          setScrollViewHeight(screenHeight - keyboardHeight - 100);
+        }
+      }
+    );
+
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        if (Platform.OS === "android") {
+          setScrollViewHeight(null);
+        }
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, [scrollViewHeight]);
 
   const handleSignUp = async () => {
     if (!firstName || !lastName || !username || !email || !password || !role) {
@@ -84,7 +123,11 @@ const SignUp = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : null}
+      style={styles.container}
+      keyboardVerticalOffset={0}
+    >
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
@@ -94,7 +137,17 @@ const SignUp = () => {
 
       <Text style={styles.title}>Create account</Text>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={[
+          styles.content,
+          scrollViewHeight ? { maxHeight: scrollViewHeight } : null,
+        ]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="always"
+        contentInset={{ bottom: 0 }}
+        automaticallyAdjustKeyboardInsets={false}
+      >
         <View style={styles.inputContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>First Name</Text>
@@ -105,36 +158,48 @@ const SignUp = () => {
               autoCapitalize="words"
               value={firstName}
               onChangeText={setFirstName}
+              returnKeyType="next"
+              onSubmitEditing={() => lastNameRef.current?.focus()}
+              blurOnSubmit={false}
             />
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Last Name</Text>
             <TextInput
+              ref={lastNameRef}
               style={styles.input}
               placeholder="Your last name"
               placeholderTextColor="#666"
               autoCapitalize="words"
               value={lastName}
               onChangeText={setLastName}
+              returnKeyType="next"
+              onSubmitEditing={() => usernameRef.current?.focus()}
+              blurOnSubmit={false}
             />
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Username</Text>
             <TextInput
+              ref={usernameRef}
               style={styles.input}
               placeholder="Choose a username"
               placeholderTextColor="#666"
               autoCapitalize="none"
               value={username}
               onChangeText={setUsername}
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
+              blurOnSubmit={false}
             />
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email address</Text>
             <TextInput
+              ref={emailRef}
               style={styles.input}
               placeholder="Your email address"
               placeholderTextColor="#666"
@@ -142,6 +207,9 @@ const SignUp = () => {
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
             />
           </View>
 
@@ -149,6 +217,7 @@ const SignUp = () => {
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordContainer}>
               <TextInput
+                ref={passwordRef}
                 style={styles.passwordInput}
                 placeholder="Create a password"
                 placeholderTextColor="#666"
@@ -156,6 +225,8 @@ const SignUp = () => {
                 autoCapitalize="none"
                 value={password}
                 onChangeText={setPassword}
+                returnKeyType="done"
+                onSubmitEditing={handleSignUp}
               />
               <TouchableOpacity
                 style={styles.showButton}
@@ -213,7 +284,7 @@ const SignUp = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -222,12 +293,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 20,
-    justifyContent: "flex-start",
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    marginTop: 100,
+    marginTop: 60,
     marginBottom: 20,
     textAlign: "center",
   },
@@ -319,6 +389,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    marginBottom: 0,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+    flexGrow: 1,
   },
 });
 

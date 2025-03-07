@@ -962,6 +962,7 @@ const EditTemplate = () => {
 
       // Create days for the new week
       const newDays = [];
+      const newExercisesState = {};
 
       for (const day of daysToCopy) {
         const dayRef = doc(collection(db, "templateDays"));
@@ -988,21 +989,39 @@ const EditTemplate = () => {
         const exercisesSnapshot = await getDocs(exercisesQuery);
         const exercisesToCopy = exercisesSnapshot.docs.map((doc) => doc.data());
 
+        // Create array to track the new exercises for this day
+        const newDayExercises = [];
+
         // Copy exercises to the new day
         for (const exercise of exercisesToCopy) {
           const exerciseRef = doc(collection(db, "templateExercises"));
+          const newExerciseId = exerciseRef.id;
 
-          await setDoc(exerciseRef, {
-            id: exerciseRef.id,
+          const newExercise = {
+            id: newExerciseId,
             dayId: dayId,
             name: exercise.name,
             sets: [...exercise.sets],
             notes: exercise.notes,
             order: exercise.order,
             createdAt: serverTimestamp(),
-          });
+          };
+
+          await setDoc(exerciseRef, newExercise);
+
+          // Add the new exercise to our temporary array for state update
+          newDayExercises.push(newExercise);
+        }
+
+        // Store the new exercises for this day
+        if (newDayExercises.length > 0) {
+          newExercisesState[dayId] = newDayExercises;
         }
       }
+
+      console.log(
+        `Created ${Object.keys(newExercisesState).length} days of exercises`
+      );
 
       // Update state
       const newWeek = {
@@ -1014,6 +1033,12 @@ const EditTemplate = () => {
 
       setWeeks([...weeks, newWeek]);
       setDays({ ...days, [weekId]: newDays });
+
+      // Update exercises state with the new exercises
+      setExercises((prevExercises) => ({
+        ...prevExercises,
+        ...newExercisesState,
+      }));
 
       // Update UI state
       setIsProgrammaticScroll(true);

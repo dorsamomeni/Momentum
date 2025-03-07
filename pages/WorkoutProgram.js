@@ -12,6 +12,7 @@ import {
   Modal,
   Alert,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -32,6 +33,7 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { db } from "../src/config/firebase";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const { width } = Dimensions.get("window");
 
@@ -111,6 +113,13 @@ const WorkoutProgram = ({ route }) => {
   const [tempBlockName, setTempBlockName] = useState("");
 
   const [refreshing, setRefreshing] = useState(false);
+
+  // Add state variables for date editing
+  const [isDateEditModalVisible, setIsDateEditModalVisible] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState(new Date());
+  const [tempEndDate, setTempEndDate] = useState(new Date());
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   const safelyAccessProperty = (obj, path, defaultValue = "") => {
     try {
@@ -1326,6 +1335,115 @@ const WorkoutProgram = ({ route }) => {
       });
   }, []);
 
+  // Add a function to handle opening the date edit modal
+  const handleEditDates = () => {
+    // Initialize temp dates from current block dates
+    let startDate = new Date();
+    let endDate = new Date();
+
+    try {
+      // Parse start date
+      if (block.startDate) {
+        if (block.startDate.seconds) {
+          startDate = new Date(block.startDate.seconds * 1000);
+        } else if (typeof block.startDate === "string") {
+          startDate = new Date(block.startDate);
+        } else if (block.startDate instanceof Date) {
+          startDate = block.startDate;
+        }
+      }
+
+      // Parse end date
+      if (block.endDate) {
+        if (block.endDate.seconds) {
+          endDate = new Date(block.endDate.seconds * 1000);
+        } else if (typeof block.endDate === "string") {
+          endDate = new Date(block.endDate);
+        } else if (block.endDate instanceof Date) {
+          endDate = block.endDate;
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing dates:", error);
+    }
+
+    setTempStartDate(startDate);
+    setTempEndDate(endDate);
+    setIsDateEditModalVisible(true);
+  };
+
+  // Function to show date picker
+  const showDatePicker = (type) => {
+    if (type === "start") {
+      setShowStartDatePicker(true);
+      setShowEndDatePicker(false);
+    } else {
+      setShowEndDatePicker(true);
+      setShowStartDatePicker(false);
+    }
+  };
+
+  // Handle date changes
+  const handleDateChange = (event, selectedDate, type) => {
+    if (Platform.OS === "android") {
+      setShowStartDatePicker(false);
+      setShowEndDatePicker(false);
+    }
+
+    if (selectedDate) {
+      if (type === "start") {
+        setTempStartDate(selectedDate);
+      } else {
+        setTempEndDate(selectedDate);
+      }
+    }
+  };
+
+  // Save the updated dates
+  const saveDates = async () => {
+    try {
+      // Make sure end date is not before start date
+      if (tempEndDate < tempStartDate) {
+        Alert.alert(
+          "Invalid Dates",
+          "End date cannot be before start date. Please adjust your dates."
+        );
+        return;
+      }
+
+      // Convert dates to Firestore format
+      const formattedStartDate = {
+        seconds: Math.floor(tempStartDate.getTime() / 1000),
+        nanoseconds: 0,
+      };
+
+      const formattedEndDate = {
+        seconds: Math.floor(tempEndDate.getTime() / 1000),
+        nanoseconds: 0,
+      };
+
+      // Update in Firestore
+      const blockRef = doc(db, "blocks", blockId);
+      await updateDoc(blockRef, {
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update local state
+      setBlock((prevBlock) => ({
+        ...prevBlock,
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
+      }));
+
+      setIsDateEditModalVisible(false);
+    } catch (error) {
+      console.error("Error saving dates:", error);
+      Alert.alert("Error", "Failed to save dates");
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
@@ -1350,10 +1468,20 @@ const WorkoutProgram = ({ route }) => {
                 </TouchableOpacity>
               )}
             </View>
-            <Text style={styles.subtitle}>
-              {formatTimestamp(safelyAccessProperty(block, "startDate"))} -{" "}
-              {formatTimestamp(safelyAccessProperty(block, "endDate"))}
-            </Text>
+            <View style={styles.dateRow}>
+              <Text style={styles.subtitle}>
+                {formatTimestamp(safelyAccessProperty(block, "startDate"))} -{" "}
+                {formatTimestamp(safelyAccessProperty(block, "endDate"))}
+              </Text>
+              {!isAthlete && (
+                <TouchableOpacity
+                  style={styles.dateEditButton}
+                  onPress={handleEditDates}
+                >
+                  <Icon name="pencil-outline" size={14} color="#666" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
         <View style={styles.actionsContainer}>
@@ -1666,6 +1794,143 @@ const WorkoutProgram = ({ route }) => {
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Date Edit Modal */}
+      <Modal
+        visible={isDateEditModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDateEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Block Dates</Text>
+
+            <View style={styles.dateSection}>
+              {/* Start Date */}
+              <View style={styles.datePickerRow}>
+                <Text style={styles.dateLabel}>Start Date:</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => showDatePicker("start")}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {tempStartDate.toLocaleDateString()}
+                  </Text>
+                  <Icon name="calendar-outline" size={20} color="#333" />
+                </TouchableOpacity>
+              </View>
+
+              {/* End Date */}
+              <View style={styles.datePickerRow}>
+                <Text style={styles.dateLabel}>End Date:</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => showDatePicker("end")}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {tempEndDate.toLocaleDateString()}
+                  </Text>
+                  <Icon name="calendar-outline" size={20} color="#333" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Platform-specific date pickers */}
+            {Platform.OS === "ios" ? (
+              <>
+                {showStartDatePicker && (
+                  <View style={styles.iosPickerContainer}>
+                    <DateTimePicker
+                      value={tempStartDate}
+                      mode="date"
+                      display="spinner"
+                      onChange={(event, date) =>
+                        handleDateChange(event, date, "start")
+                      }
+                      style={styles.iosPicker}
+                      textColor="#000000"
+                    />
+                    <TouchableOpacity
+                      style={styles.datePickerDoneButton}
+                      onPress={() => setShowStartDatePicker(false)}
+                    >
+                      <Text style={styles.datePickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {showEndDatePicker && (
+                  <View style={styles.iosPickerContainer}>
+                    <DateTimePicker
+                      value={tempEndDate}
+                      mode="date"
+                      display="spinner"
+                      onChange={(event, date) =>
+                        handleDateChange(event, date, "end")
+                      }
+                      style={styles.iosPicker}
+                      textColor="#000000"
+                    />
+                    <TouchableOpacity
+                      style={styles.datePickerDoneButton}
+                      onPress={() => setShowEndDatePicker(false)}
+                    >
+                      <Text style={styles.datePickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                {showStartDatePicker && (
+                  <DateTimePicker
+                    value={tempStartDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) =>
+                      handleDateChange(event, date, "start")
+                    }
+                    textColor="#000000"
+                  />
+                )}
+
+                {showEndDatePicker && (
+                  <DateTimePicker
+                    value={tempEndDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) =>
+                      handleDateChange(event, date, "end")
+                    }
+                    textColor="#000000"
+                  />
+                )}
+              </>
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setIsDateEditModalVisible(false);
+                  setShowStartDatePicker(false);
+                  setShowEndDatePicker(false);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={saveDates}
+              >
+                <Text style={styles.confirmButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -2162,6 +2427,73 @@ const styles = StyleSheet.create({
   },
   blockRenameButton: {
     padding: 4,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  dateEditButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  dateSection: {
+    marginBottom: 20,
+  },
+  datePickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  dateLabel: {
+    fontSize: 16,
+    width: 100,
+    color: "#333",
+  },
+  dateButton: {
+    backgroundColor: "#f0f0f0",
+    padding: 12,
+    borderRadius: 8,
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  iosPickerContainer: {
+    backgroundColor: "#f8f8f8",
+    borderRadius: 10,
+    marginBottom: 20,
+    paddingBottom: 8,
+    width: "100%",
+    overflow: "hidden",
+  },
+  iosPicker: {
+    height: 200,
+    width: 280,
+    color: "#000000",
+    transform: [{ scaleX: 0.9 }],
+    alignSelf: "center",
+  },
+  datePickerDoneButton: {
+    alignSelf: "flex-end",
+    padding: 10,
+    marginRight: 10,
+  },
+  datePickerDoneText: {
+    color: "#007AFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  confirmButton: {
+    backgroundColor: "#000",
+  },
+  confirmButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 
