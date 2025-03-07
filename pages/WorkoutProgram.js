@@ -1089,6 +1089,7 @@ const WorkoutProgram = ({ route }) => {
                   }
                   onBlur={() => handleSetValueBlur(setIndex, "scheme")}
                   placeholder="Sets x Reps @ RPE"
+                  editable={!isAthlete}
                 />
               </View>
 
@@ -1102,6 +1103,7 @@ const WorkoutProgram = ({ route }) => {
                   onBlur={() => handleSetValueBlur(setIndex, "weight")}
                   keyboardType="numeric"
                   placeholder="0"
+                  editable={true}
                 />
                 <TouchableOpacity
                   style={styles.weightUnitButton}
@@ -1115,12 +1117,14 @@ const WorkoutProgram = ({ route }) => {
             </View>
           ))}
 
-          <TouchableOpacity
-            style={styles.addSetButton}
-            onPress={() => handleAddSet(exercise.id, exercise.dayId)}
-          >
-            <Text style={styles.addSetButtonText}>+ Add Set</Text>
-          </TouchableOpacity>
+          {!isAthlete && (
+            <TouchableOpacity
+              style={styles.addSetButton}
+              onPress={() => handleAddSet(exercise.id, exercise.dayId)}
+            >
+              <Text style={styles.addSetButtonText}>+ Add Set</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.noteContainer}>
             <Text style={styles.noteLabel}>Notes:</Text>
@@ -1131,6 +1135,7 @@ const WorkoutProgram = ({ route }) => {
               onBlur={handleNotesBlur}
               placeholder="Add notes here"
               multiline
+              editable={true}
             />
           </View>
         </View>

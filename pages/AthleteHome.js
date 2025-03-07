@@ -236,7 +236,7 @@ const AthleteHome = () => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.button}
-            onPress={() => navigation.navigate("FindCoach")}
+            onPress={() => navigation.navigate("AddCoach")}
           >
             <Icon name="people" size={14} color="#000" />
             <Text style={styles.buttonText}>Add Coach</Text>
@@ -374,6 +374,7 @@ const styles = StyleSheet.create({
     fontSize: 25,
     fontWeight: "bold",
     paddingBottom: 0,
+    paddingRight: 10,
   },
   buttonContainer: {
     flexDirection: "row",

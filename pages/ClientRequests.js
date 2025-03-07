@@ -95,7 +95,9 @@ const ClientRequests = () => {
 
       // Remove request from local state
       setRequests(requests.filter((req) => req.id !== athleteId));
-      setOutgoingRequests(outgoingRequests.filter((req) => req.id !== athleteId));
+      setOutgoingRequests(
+        outgoingRequests.filter((req) => req.id !== athleteId)
+      );
 
       Alert.alert("Success", "Client request accepted");
       navigation.goBack();
@@ -168,7 +170,10 @@ const ClientRequests = () => {
             <View key={athlete.id} style={styles.requestContainer}>
               <View style={styles.leftContainer}>
                 <View
-                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                  style={[
+                    styles.profilePhoto,
+                    { backgroundColor: athlete.profileColor || "#A8E6CF" },
+                  ]}
                 >
                   <Text style={styles.initial}>
                     {athlete.firstName[0].toUpperCase()}
@@ -212,7 +217,10 @@ const ClientRequests = () => {
             <View key={athlete.id} style={styles.requestContainer}>
               <View style={styles.leftContainer}>
                 <View
-                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                  style={[
+                    styles.profilePhoto,
+                    { backgroundColor: athlete.profileColor || "#A8E6CF" },
+                  ]}
                 >
                   <Text style={styles.initial}>
                     {athlete.firstName[0].toUpperCase()}

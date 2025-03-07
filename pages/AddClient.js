@@ -155,7 +155,10 @@ const AddClient = () => {
             <View key={user.id} style={styles.userCard}>
               <View style={styles.userInfo}>
                 <View
-                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                  style={[
+                    styles.profilePhoto,
+                    { backgroundColor: user.profileColor || "#A8E6CF" },
+                  ]}
                 >
                   <Text style={styles.initial}>
                     {user.firstName[0].toUpperCase()}

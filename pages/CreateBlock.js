@@ -246,6 +246,19 @@ const CreateBlock = ({ route }) => {
               <Text style={styles.createButtonText}>Create Block</Text>
             </TouchableOpacity>
 
+            {/* Use a Template Button */}
+            <TouchableOpacity
+              style={styles.templateButton}
+              onPress={() =>
+                navigation.navigate("Templates", {
+                  selectMode: true,
+                  clientId: client.id,
+                })
+              }
+            >
+              <Text style={styles.templateButtonText}>Use a Template</Text>
+            </TouchableOpacity>
+
             {/* Extra space at bottom to ensure button is visible with keyboard */}
             <View style={styles.keyboardSpace} />
           </ScrollView>
@@ -530,6 +543,28 @@ const styles = StyleSheet.create({
     height: 220,
     fontSize: 20,
     fontWeight: "bold",
+  },
+  templateButton: {
+    backgroundColor: "#FFFFFF",
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 15,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  templateButtonText: {
+    color: "#000",
+    fontSize: 18,
+    fontWeight: "600",
   },
 });
 

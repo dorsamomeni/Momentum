@@ -21,6 +21,10 @@ import AthleteTabs from "./navigation/AthleteTabs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import CoachRequests from "./pages/CoachRequests";
 import FindCoach from "./pages/FindCoach";
+import Templates from "./pages/Templates";
+import EditTemplate from "./pages/EditTemplate";
+import EditTemplateExercise from "./pages/EditTemplateExercise";
+import AddCoach from "./pages/AddCoach";
 
 const slides = [
   {
@@ -153,6 +157,13 @@ export default function App() {
               <Stack.Screen name="UserProfile" component={UserProfile} />
               <Stack.Screen name="CoachRequests" component={CoachRequests} />
               <Stack.Screen name="FindCoach" component={FindCoach} />
+              <Stack.Screen name="AddCoach" component={AddCoach} />
+              <Stack.Screen name="Templates" component={Templates} />
+              <Stack.Screen name="EditTemplate" component={EditTemplate} />
+              <Stack.Screen
+                name="EditTemplateExercise"
+                component={EditTemplateExercise}
+              />
             </>
           )}
         </Stack.Navigator>

@@ -8,6 +8,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { auth, db } from "../config/firebase";
+import { getRandomProfileColor } from "../utils/colors";
 
 export const signup = async (userData) => {
   const { email, password, firstName, lastName, username, role } = userData;
@@ -39,6 +40,10 @@ export const signup = async (userData) => {
     });
     console.log("3. Display name updated");
 
+    // Assign random profile color
+    const profileColor = getRandomProfileColor();
+    console.log("4. Assigned profile color:", profileColor);
+
     // Create user document
     const userDocRef = doc(db, "users", user.uid);
     const userDataForStore = {
@@ -47,6 +52,7 @@ export const signup = async (userData) => {
       username: username.toLowerCase(),
       email,
       role,
+      profileColor, // Store the assigned profile color
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       // Role-specific fields
@@ -66,9 +72,9 @@ export const signup = async (userData) => {
       status: "inactive",
     };
 
-    console.log("4. Attempting to create Firestore document");
+    console.log("5. Attempting to create Firestore document");
     await setDoc(userDocRef, userDataForStore);
-    console.log("5. Firestore document created successfully");
+    console.log("6. Firestore document created successfully");
 
     return {
       user,

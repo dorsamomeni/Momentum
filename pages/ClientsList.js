@@ -7,6 +7,10 @@ import {
   Image,
   ScrollView,
   Alert,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+  SafeAreaView,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -24,16 +28,16 @@ const ClientsList = () => {
       const coachId = auth.currentUser.uid;
       const coachDoc = await getDoc(doc(db, "users", coachId));
       const coachData = coachDoc.data();
-      
+
       // Get the list of athlete IDs from both arrays
       const athleteIds = [
         ...(coachData.athletes || []),
-        ...(coachData.clientList || []).map(client => client.athleteId)
+        ...(coachData.clientList || []).map((client) => client.athleteId),
       ];
-      
+
       // Remove duplicates
       const uniqueAthleteIds = [...new Set(athleteIds)];
-      
+
       // Fetch each athlete's details
       const athleteDetails = await Promise.all(
         uniqueAthleteIds.map(async (athleteId) => {
@@ -44,7 +48,7 @@ const ClientsList = () => {
           };
         })
       );
-      
+
       setClients(athleteDetails);
     } catch (error) {
       console.error("Error loading clients:", error);
@@ -64,7 +68,7 @@ const ClientsList = () => {
   );
 
   const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
+    setRefreshKey((prev) => prev + 1);
   };
 
   const handleRemoveClient = (clientId, clientName) => {
@@ -74,36 +78,82 @@ const ClientsList = () => {
       [
         {
           text: "Cancel",
-          style: "cancel"
+          style: "cancel",
         },
         {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
             try {
+              setClients(clients.filter((c) => c.id !== clientId)); // Immediately update UI
+
               const user = auth.currentUser;
               if (user) {
                 const coachRef = doc(db, "users", user.uid);
                 const clientRef = doc(db, "users", clientId);
-                
-                // Remove from both possible locations in coach's data
-                await updateDoc(coachRef, {
-                  athletes: arrayRemove(clientId),
-                  clientList: arrayRemove({ athleteId: clientId })
-                });
-                
-                // Remove coach from client's data
-                await updateDoc(clientRef, {
-                  coach: arrayRemove(user.uid)
-                });
-                
-                // Update local state
-                setClients(prevClients => 
-                  prevClients.filter(client => client.id !== clientId)
-                );
-                
+
+                // Get current coach data
+                const coachDoc = await getDoc(coachRef);
+                if (!coachDoc.exists()) {
+                  throw new Error("Coach data not found");
+                }
+
+                const coachData = coachDoc.data();
+                console.log("Current coach data:", coachData);
+
+                // Handle athletes array (simple array of IDs)
+                if (coachData.athletes && Array.isArray(coachData.athletes)) {
+                  await updateDoc(coachRef, {
+                    athletes: arrayRemove(clientId),
+                  });
+                  console.log("Removed from athletes array");
+                }
+
+                // Handle clientList array (array of objects with athleteId)
+                if (
+                  coachData.clientList &&
+                  Array.isArray(coachData.clientList)
+                ) {
+                  // Find the client object in the clientList
+                  const clientObj = coachData.clientList.find(
+                    (c) => c.athleteId === clientId
+                  );
+                  if (clientObj) {
+                    await updateDoc(coachRef, {
+                      clientList: arrayRemove(clientObj),
+                    });
+                    console.log("Removed from clientList array");
+                  }
+                }
+
+                // Get current client data
+                const clientDoc = await getDoc(clientRef);
+                if (clientDoc.exists()) {
+                  const clientData = clientDoc.data();
+                  console.log("Current client data:", clientData);
+
+                  // Handle client's coach array
+                  if (clientData.coach && Array.isArray(clientData.coach)) {
+                    await updateDoc(clientRef, {
+                      coach: arrayRemove(user.uid),
+                      status: "unassigned",
+                      coachId: null,
+                    });
+                    console.log("Removed coach from client data");
+                  } else if (clientData.coachId === user.uid) {
+                    // Handle single coachId field
+                    await updateDoc(clientRef, {
+                      coachId: null,
+                      status: "unassigned",
+                    });
+                    console.log("Reset client's coachId to null");
+                  }
+                }
+
                 // Refresh the client list
-                loadClients();
+                setTimeout(() => {
+                  loadClients();
+                }, 500); // Delay reload to ensure Firestore updates have propagated
               }
             } catch (error) {
               console.error("Error removing client:", error);
@@ -111,9 +161,10 @@ const ClientsList = () => {
                 "Error",
                 "Failed to remove client. Please try again."
               );
+              loadClients(); // Reload on error to restore the list
             }
-          }
-        }
+          },
+        },
       ],
       { cancelable: true }
     );
@@ -124,6 +175,13 @@ const ClientsList = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Clients</Text>
         <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate("Templates")}
+          >
+            <Icon name="folder-outline" size={16} color="#000" />
+            <Text style={styles.buttonText}>My Templates</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.button}
             onPress={() => navigation.navigate("ClientRequests")}
@@ -155,7 +213,10 @@ const ClientsList = () => {
             >
               <View style={styles.leftContainer}>
                 <View
-                  style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}
+                  style={[
+                    styles.profilePhoto,
+                    { backgroundColor: client.profileColor || "#A8E6CF" },
+                  ]}
                 >
                   <Text style={styles.initial}>
                     {client.firstName[0].toUpperCase()}
@@ -196,31 +257,33 @@ const styles = StyleSheet.create({
     paddingTop: 140,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: "column",
+    alignItems: "flex-start",
     marginBottom: 30,
   },
   title: {
     fontSize: 30,
     fontWeight: "bold",
+    marginBottom: 15,
   },
   buttonContainer: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
+    flexWrap: "nowrap",
+    alignItems: "center",
   },
   button: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f0f0f0",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 8,
   },
   buttonText: {
     color: "#000",
-    fontSize: 14,
-    marginLeft: 6,
+    fontSize: 12,
+    marginLeft: 4,
     fontWeight: "500",
   },
   clientsList: {

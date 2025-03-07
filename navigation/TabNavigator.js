@@ -19,6 +19,9 @@ import UserProfile from "../pages/UserProfile";
 import FindCoach from "../pages/FindCoach";
 import FindClients from "../pages/FindClients";
 import SendProgram from "../pages/SendProgram";
+import Templates from "../pages/Templates";
+import EditTemplate from "../pages/EditTemplate";
+import EditTemplateExercise from "../pages/EditTemplateExercise";
 
 import { auth, db } from "../src/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -62,6 +65,12 @@ const MainStack = () => {
       <Stack.Screen name="AddClient" component={AddClient} />
       <Stack.Screen name="UserProfile" component={UserProfile} />
       <Stack.Screen name="FindCoach" component={FindCoach} />
+      <Stack.Screen name="Templates" component={Templates} />
+      <Stack.Screen name="EditTemplate" component={EditTemplate} />
+      <Stack.Screen
+        name="EditTemplateExercise"
+        component={EditTemplateExercise}
+      />
     </Stack.Navigator>
   );
 };

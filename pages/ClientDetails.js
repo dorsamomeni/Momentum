@@ -140,9 +140,20 @@ const ClientDetails = ({ route }) => {
       const endDateToUse =
         endDate || new Date(new Date().setDate(new Date().getDate() + 28));
 
+      // Convert dates to Firestore-compatible format
+      const formattedStartDate = {
+        seconds: Math.floor(startDateToUse.getTime() / 1000),
+        nanoseconds: 0,
+      };
+
+      const formattedEndDate = {
+        seconds: Math.floor(endDateToUse.getTime() / 1000),
+        nanoseconds: 0,
+      };
+
       // Log date objects for debugging
-      console.log("Start date:", startDateToUse);
-      console.log("End date:", endDateToUse);
+      console.log("Start date formatted:", formattedStartDate);
+      console.log("End date formatted:", formattedEndDate);
 
       // Create new block using our new structure with user-selected dates
       const newBlock = {
@@ -151,8 +162,8 @@ const ClientDetails = ({ route }) => {
         athleteId: route.params.client.id,
         status: "active",
         sessionsPerWeek,
-        startDate: startDateToUse,
-        endDate: endDateToUse,
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
       };
 
       // Add console log before updating Firebase
@@ -190,7 +201,7 @@ const ClientDetails = ({ route }) => {
         blockId: blockId,
         weekNumber: 1, // Only week 1
         daysPerWeek: sessionsPerWeek,
-        startDate: startDateToUse,
+        startDate: formattedStartDate,
         submittedAt: serverTimestamp(),
       });
 
@@ -241,14 +252,45 @@ const ClientDetails = ({ route }) => {
         // Format dates for display with error handling
         try {
           if (blockData.startDate) {
-            blockData.startDate = formatDate(blockData.startDate);
+            if (blockData.startDate.seconds) {
+              // Handle Firestore timestamp format
+              const startDateObj = new Date(blockData.startDate.seconds * 1000);
+              blockData.startDate = formatDate(startDateObj);
+            } else if (blockData.startDate instanceof Date) {
+              // Handle Date object
+              blockData.startDate = formatDate(blockData.startDate);
+            } else if (typeof blockData.startDate === "string") {
+              // Handle string date
+              blockData.startDate = blockData.startDate;
+            } else {
+              // Unknown format
+              blockData.startDate = "Unknown date";
+            }
           }
 
           if (blockData.endDate) {
-            blockData.endDate = formatDate(blockData.endDate);
+            if (blockData.endDate.seconds) {
+              // Handle Firestore timestamp format
+              const endDateObj = new Date(blockData.endDate.seconds * 1000);
+              blockData.endDate = formatDate(endDateObj);
+            } else if (blockData.endDate instanceof Date) {
+              // Handle Date object
+              blockData.endDate = formatDate(blockData.endDate);
+            } else if (typeof blockData.endDate === "string") {
+              // Handle string date
+              blockData.endDate = blockData.endDate;
+            } else {
+              // Unknown format
+              blockData.endDate = "Unknown date";
+            }
           }
         } catch (e) {
-          console.error("Error formatting dates:", e);
+          console.error(
+            "Error formatting dates:",
+            e,
+            blockData.startDate,
+            blockData.endDate
+          );
           blockData.startDate = blockData.startDate ? "Unknown date" : "";
           blockData.endDate = blockData.endDate ? "Unknown date" : "";
         }
@@ -984,7 +1026,12 @@ const ClientDetails = ({ route }) => {
       >
         <View style={styles.clientHeader}>
           <View style={styles.clientInfo}>
-            <View style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}>
+            <View
+              style={[
+                styles.profilePhoto,
+                { backgroundColor: client.profileColor || "#A8E6CF" },
+              ]}
+            >
               <Text style={styles.initial}>
                 {client.firstName[0].toUpperCase()}
               </Text>
