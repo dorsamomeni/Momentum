@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   PanResponder,
   Modal,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -105,6 +106,12 @@ const WorkoutProgram = ({ route }) => {
       .map((_, i) => `Week ${i + 1}`);
   });
 
+  const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] =
+    useState(false);
+  const [tempBlockName, setTempBlockName] = useState("");
+
+  const [refreshing, setRefreshing] = useState(false);
+
   const safelyAccessProperty = (obj, path, defaultValue = "") => {
     try {
       const keys = path.split(".");
@@ -154,7 +161,7 @@ const WorkoutProgram = ({ route }) => {
         console.error("Invalid blockId:", blockId);
         Alert.alert("Error", "Invalid workout program");
         navigation.goBack();
-        return;
+        return Promise.reject("Invalid blockId");
       }
 
       // Fetch block data with extra error handling
@@ -164,14 +171,14 @@ const WorkoutProgram = ({ route }) => {
         if (!blockDoc.exists()) {
           Alert.alert("Error", "Block not found");
           navigation.goBack();
-          return;
+          return Promise.reject("Block not found");
         }
         blockData = { id: blockDoc.id, ...blockDoc.data() };
       } catch (error) {
         console.error("Error fetching block:", error);
         Alert.alert("Error", "Failed to load workout program");
         navigation.goBack();
-        return;
+        return Promise.reject(error);
       }
 
       setBlock(blockData);
@@ -204,6 +211,12 @@ const WorkoutProgram = ({ route }) => {
 
       setWeeks(weeksData);
       setTotalWeeks(weeksData.length || 1);
+
+      // Update week names from the fetched data
+      const updatedWeekNames = weeksData.map(
+        (week) => week.name || `Week ${week.weekNumber || 1}`
+      );
+      setWeekNames(updatedWeekNames);
 
       // Reset days and exercises maps to avoid stale data
       const daysMap = {};
@@ -275,10 +288,14 @@ const WorkoutProgram = ({ route }) => {
 
       setExercises(exercisesMap);
       setDays(daysMap);
+
+      console.log("Workout program data refreshed successfully");
+      return Promise.resolve();
     } catch (error) {
       console.error("Error fetching block data:", error);
       Alert.alert("Error", "Failed to load workout program");
       navigation.goBack();
+      return Promise.reject(error);
     }
   };
 
@@ -295,12 +312,14 @@ const WorkoutProgram = ({ route }) => {
       const weekRef = doc(collection(db, "weeks"));
       const weekId = weekRef.id;
       const weekNumber = totalWeeks + 1;
+      const newWeekName = `Week ${weekNumber}`;
 
       // Set week data in Firestore
       await setDoc(weekRef, {
         id: weekId,
         blockId: block.id,
         weekNumber: weekNumber,
+        name: newWeekName, // Add default name for the week
         daysPerWeek: block.sessionsPerWeek || 1,
         startDate: new Date(),
         submittedAt: serverTimestamp(),
@@ -331,6 +350,7 @@ const WorkoutProgram = ({ route }) => {
         id: weekId,
         blockId: block.id,
         weekNumber: weekNumber,
+        name: newWeekName, // Include name in local state
         daysPerWeek: block.sessionsPerWeek || 1,
       };
 
@@ -342,8 +362,6 @@ const WorkoutProgram = ({ route }) => {
         ...days,
         [weekId]: newDays,
       });
-
-      const newWeekName = `Week ${weekNumber}`;
 
       setIsProgrammaticScroll(true);
 
@@ -403,31 +421,37 @@ const WorkoutProgram = ({ route }) => {
 
   const handleCopyWeek = async () => {
     try {
-      // Check if the current week exists
-      if (!weeks[currentWeek - 1]) {
-        throw new Error("Cannot copy non-existent week");
+      if (currentWeek < 1 || currentWeek > weeks.length) {
+        throw new Error("Invalid week to copy");
       }
 
-      // Get the current week from the weeks array
+      setIsSaving(true);
+      setIsProgrammaticScroll(true);
+
       const weekToCopy = weeks[currentWeek - 1];
+      if (!weekToCopy || !weekToCopy.id) {
+        throw new Error("Week data not found");
+      }
 
       // Create a new week in Firestore
       const weekRef = doc(collection(db, "weeks"));
       const weekId = weekRef.id;
       const weekNumber = totalWeeks + 1;
+      const newWeekName = `Week ${weekNumber} (Copy)`;
 
-      // Copy week data to Firestore
+      // Get days for current week
+      const daysForWeek = days[weekToCopy.id] || [];
+
+      // Create the new week
       await setDoc(weekRef, {
         id: weekId,
         blockId: block.id,
         weekNumber: weekNumber,
+        name: newWeekName, // Include name for copied week
         daysPerWeek: weekToCopy.daysPerWeek || block.sessionsPerWeek || 1,
-        startDate: new Date(),
         submittedAt: serverTimestamp(),
       });
 
-      // Get days for week being copied
-      const daysForWeek = days[weekToCopy.id] || [];
       const newDays = [];
 
       // Copy each day and its exercises
@@ -493,8 +517,6 @@ const WorkoutProgram = ({ route }) => {
         [weekId]: newDays,
       });
 
-      const newWeekName = `Week ${weekNumber}`;
-
       setIsProgrammaticScroll(true);
 
       // Update UI state
@@ -531,30 +553,106 @@ const WorkoutProgram = ({ route }) => {
     }
   };
 
-  const handleDeleteWeek = () => {
-    if (totalWeeks > 1) {
-      // Remove the current week from blockWeeks
-      const updatedWeeks = [...blockWeeks];
-      updatedWeeks.splice(currentWeek - 1, 1);
-      setBlockWeeks(updatedWeeks);
+  const handleDeleteWeek = async () => {
+    if (totalWeeks <= 1) {
+      Alert.alert(
+        "Cannot Delete",
+        "You must have at least one week in your program."
+      );
+      return;
+    }
 
-      setTotalWeeks(totalWeeks - 1);
-
-      // If deleting last week, move to previous week
-      if (currentWeek === totalWeeks) {
-        setCurrentWeek(currentWeek - 1);
-        scrollViewRef.current?.scrollTo({
-          x: (currentWeek - 2) * width,
-          animated: true,
-        });
-      } else {
-        // Stay on same position but update week number since current week was deleted
-        setCurrentWeek(currentWeek);
-        scrollViewRef.current?.scrollTo({
-          x: (currentWeek - 1) * width,
-          animated: true,
-        });
+    try {
+      const weekToDelete = weeks[currentWeek - 1];
+      if (!weekToDelete || !weekToDelete.id) {
+        throw new Error("Week data not found");
       }
+
+      // Confirm deletion
+      Alert.alert(
+        "Delete Week",
+        `Are you sure you want to delete ${weekNames[currentWeek - 1]}?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                setIsSaving(true);
+
+                // First, delete all days and exercises for this week
+                const daysForWeek = days[weekToDelete.id] || [];
+                const batch = writeBatch(db);
+
+                // Delete days and their exercises
+                for (const day of daysForWeek) {
+                  if (day.id) {
+                    batch.delete(doc(db, "days", day.id));
+
+                    // Delete exercises for this day
+                    const exercisesForDay = exercises[day.id] || [];
+                    for (const exercise of exercisesForDay) {
+                      if (exercise.id) {
+                        batch.delete(doc(db, "exercises", exercise.id));
+                      }
+                    }
+                  }
+                }
+
+                // Delete the week itself
+                batch.delete(doc(db, "weeks", weekToDelete.id));
+
+                // Commit all deletions
+                await batch.commit();
+
+                // Update local state
+                const updatedWeeks = [...weeks];
+                updatedWeeks.splice(currentWeek - 1, 1);
+                setWeeks(updatedWeeks);
+
+                const updatedBlockWeeks = [...blockWeeks];
+                updatedBlockWeeks.splice(currentWeek - 1, 1);
+                setBlockWeeks(updatedBlockWeeks);
+
+                const updatedWeekNames = [...weekNames];
+                updatedWeekNames.splice(currentWeek - 1, 1);
+                setWeekNames(updatedWeekNames);
+
+                setTotalWeeks(totalWeeks - 1);
+
+                // If deleting last week, move to previous week
+                if (currentWeek === totalWeeks) {
+                  setCurrentWeek(currentWeek - 1);
+                  scrollViewRef.current?.scrollTo({
+                    x: (currentWeek - 2) * width,
+                    animated: true,
+                  });
+                } else {
+                  // Stay on same position but update week number since current week was deleted
+                  setCurrentWeek(currentWeek);
+                  scrollViewRef.current?.scrollTo({
+                    x: (currentWeek - 1) * width,
+                    animated: true,
+                  });
+                }
+
+                setIsSaving(false);
+              } catch (error) {
+                console.error("Error deleting week:", error);
+                Alert.alert("Error", "Failed to delete week");
+                setIsSaving(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("Error preparing week deletion:", error);
+      Alert.alert("Error", "Failed to prepare week deletion");
     }
   };
 
@@ -608,14 +706,13 @@ const WorkoutProgram = ({ route }) => {
     }
   };
 
-  const handleSendProgram = () => {
-    // Navigate to the SendProgram screen with the blockId
-    navigation.navigate("SendProgram", { blockId });
-  };
-
   const handleAddExercise = async (weekId, dayId) => {
     try {
-      // Create a new exercise
+      // Get current exercises for this day to determine the next order
+      const currentExercises = exercises[dayId] || [];
+      const nextOrder = currentExercises.length;
+
+      // Create a new exercise in Firestore
       const exerciseRef = doc(collection(db, "exercises"));
       const exerciseId = exerciseRef.id;
 
@@ -630,6 +727,7 @@ const WorkoutProgram = ({ route }) => {
           },
         ],
         notes: "",
+        order: nextOrder, // Add order field
       };
 
       await setDoc(exerciseRef, newExercise);
@@ -784,12 +882,30 @@ const WorkoutProgram = ({ route }) => {
       // Delete the exercise from Firestore
       await deleteDoc(doc(db, "exercises", exerciseId));
 
-      // Update local state
+      // Update local state and reorder remaining exercises
       setExercises((prev) => {
         const updatedExercises = { ...prev };
+        // Remove the deleted exercise
         updatedExercises[dayId] = updatedExercises[dayId].filter(
           (ex) => ex.id !== exerciseId
         );
+
+        // Reorder remaining exercises
+        const reorderedExercises = updatedExercises[dayId].map(
+          (exercise, index) => ({
+            ...exercise,
+            order: index,
+          })
+        );
+
+        // Update orders in Firestore
+        reorderedExercises.forEach(async (exercise) => {
+          await updateDoc(doc(db, "exercises", exercise.id), {
+            order: exercise.order,
+          });
+        });
+
+        updatedExercises[dayId] = reorderedExercises;
         return updatedExercises;
       });
     } catch (error) {
@@ -957,7 +1073,7 @@ const WorkoutProgram = ({ route }) => {
                   handleDeleteExercise(exercise.id, exercise.dayId)
                 }
               >
-                <Text style={styles.deleteExerciseText}>-</Text>
+                <Icon name="close-outline" size={20} color="#666" />
               </TouchableOpacity>
             )}
           </View>
@@ -1028,14 +1144,182 @@ const WorkoutProgram = ({ route }) => {
     setIsRenameModalVisible(true);
   };
 
-  const saveWeekName = () => {
+  const saveWeekName = async () => {
     if (selectedWeekIndex !== null && tempWeekName.trim()) {
-      const newWeekNames = [...weekNames];
-      newWeekNames[selectedWeekIndex] = tempWeekName.trim();
-      setWeekNames(newWeekNames);
+      try {
+        // Get the week ID for the selected index
+        const weekToUpdate = weeks[selectedWeekIndex];
+        if (!weekToUpdate) {
+          throw new Error("Week not found");
+        }
+
+        console.log(
+          "Saving week name:",
+          tempWeekName.trim(),
+          "for week ID:",
+          weekToUpdate.id
+        );
+
+        // Update in Firestore
+        await updateDoc(doc(db, "weeks", weekToUpdate.id), {
+          name: tempWeekName.trim(),
+          lastUpdated: serverTimestamp(),
+        });
+
+        // Update local state
+        const newWeekNames = [...weekNames];
+        newWeekNames[selectedWeekIndex] = tempWeekName.trim();
+        setWeekNames(newWeekNames);
+
+        // Update weeks array with the new name
+        const updatedWeeks = [...weeks];
+        updatedWeeks[selectedWeekIndex] = {
+          ...updatedWeeks[selectedWeekIndex],
+          name: tempWeekName.trim(),
+        };
+        setWeeks(updatedWeeks);
+
+        console.log("Week name updated successfully");
+      } catch (error) {
+        console.error("Error saving week name:", error);
+        Alert.alert("Error", "Failed to save week name");
+      }
     }
     setIsRenameModalVisible(false);
   };
+
+  const handleDeleteDay = async (weekId, dayId) => {
+    try {
+      // First confirm with the user
+      Alert.alert(
+        "Delete Day",
+        "Are you sure you want to delete this day? This will delete all exercises in this day.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              // Delete all exercises for this day first
+              const exercisesToDelete = exercises[dayId] || [];
+              const batch = writeBatch(db);
+
+              // Delete all exercises
+              exercisesToDelete.forEach((exercise) => {
+                const exerciseRef = doc(db, "exercises", exercise.id);
+                batch.delete(exerciseRef);
+              });
+
+              // Delete the day itself
+              const dayRef = doc(db, "days", dayId);
+              batch.delete(dayRef);
+
+              // Commit the batch
+              await batch.commit();
+
+              // Update local state
+              setExercises((prev) => {
+                const newExercises = { ...prev };
+                delete newExercises[dayId];
+                return newExercises;
+              });
+
+              setDays((prev) => {
+                const newDays = { ...prev };
+                newDays[weekId] = newDays[weekId].filter(
+                  (day) => day.id !== dayId
+                );
+                return newDays;
+              });
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("Error deleting day:", error);
+      Alert.alert("Error", "Failed to delete day");
+    }
+  };
+
+  const handleAddDay = async (weekId) => {
+    try {
+      // Get current days for this week
+      const currentDays = days[weekId] || [];
+      const newDayNumber = currentDays.length + 1;
+
+      // Create new day in Firestore
+      const dayRef = doc(collection(db, "days"));
+      const dayId = dayRef.id;
+
+      await setDoc(dayRef, {
+        id: dayId,
+        weekId: weekId,
+        dayNumber: newDayNumber,
+        submittedAt: serverTimestamp(),
+      });
+
+      const newDay = {
+        id: dayId,
+        weekId: weekId,
+        dayNumber: newDayNumber,
+      };
+
+      // Update local state
+      setDays((prev) => ({
+        ...prev,
+        [weekId]: [...(prev[weekId] || []), newDay],
+      }));
+    } catch (error) {
+      console.error("Error adding day:", error);
+      Alert.alert("Error", "Failed to add day");
+    }
+  };
+
+  const handleRenameBlock = () => {
+    setTempBlockName(block?.name || "");
+    setIsBlockRenameModalVisible(true);
+  };
+
+  const saveBlockName = async () => {
+    if (!tempBlockName.trim()) {
+      setIsBlockRenameModalVisible(false);
+      return;
+    }
+
+    try {
+      // Update in Firestore
+      await updateDoc(doc(db, "blocks", blockId), {
+        name: tempBlockName.trim(),
+        lastUpdated: serverTimestamp(),
+      });
+
+      // Update local state
+      setBlock((prev) => ({
+        ...prev,
+        name: tempBlockName.trim(),
+      }));
+
+      setIsBlockRenameModalVisible(false);
+    } catch (error) {
+      console.error("Error saving block name:", error);
+      Alert.alert("Error", "Failed to save block name");
+    }
+  };
+
+  const onRefresh = useCallback(() => {
+    console.log("WorkoutProgram - Pull-to-refresh triggered");
+    setRefreshing(true);
+
+    Promise.resolve()
+      .then(() => fetchBlockData())
+      .catch((error) => {
+        console.error("Error during refresh:", error);
+      })
+      .finally(() => {
+        console.log("WorkoutProgram - Refresh completed");
+        setRefreshing(false);
+      });
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -1048,40 +1332,24 @@ const WorkoutProgram = ({ route }) => {
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <View style={styles.titleContainer}>
-            <Text style={styles.headerTitle}>
-              {block?.name || "Workout Program"}
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.headerTitle}>
+                {block?.name || "Workout Program"}
+              </Text>
+              {!isAthlete && (
+                <TouchableOpacity
+                  style={styles.blockRenameButton}
+                  onPress={handleRenameBlock}
+                >
+                  <Icon name="pencil-outline" size={16} color="#666" />
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.subtitle}>
               {formatTimestamp(safelyAccessProperty(block, "startDate"))} -{" "}
               {formatTimestamp(safelyAccessProperty(block, "endDate"))}
             </Text>
           </View>
-
-          {/* Update Send Program button to be wider */}
-          {!isAthlete && (
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.topRightButton,
-                {
-                  backgroundColor: "#000",
-                  width: 120, // Make the button wider
-                },
-              ]}
-              onPress={handleSendProgram}
-            >
-              <Text
-                style={{
-                  color: "#fff",
-                  fontSize: 12,
-                  fontWeight: "600",
-                  textAlign: "center",
-                }}
-              >
-                Send Program
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
         <View style={styles.actionsContainer}>
           {!isAthlete && (
@@ -1159,6 +1427,17 @@ const WorkoutProgram = ({ route }) => {
             <ScrollView
               key={weekIndex}
               style={[styles.programContainer, { width }]}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#000000"
+                  colors={["#000000"]}
+                  progressBackgroundColor="#ffffff"
+                  title="Refreshing..."
+                  titleColor="#000000"
+                />
+              }
             >
               {weeks[weekIndex] &&
                 days[weeks[weekIndex].id] &&
@@ -1173,42 +1452,76 @@ const WorkoutProgram = ({ route }) => {
                     <View style={styles.dayHeader}>
                       <Text style={styles.dayTitle}>Day {index + 1}</Text>
                       {!isAthlete && (
-                        <TouchableOpacity
-                          style={styles.addExerciseButton}
-                          onPress={() =>
-                            handleAddExercise(weeks[weekIndex].id, day.id)
-                          }
-                        >
-                          <Text style={styles.addExerciseIcon}>+</Text>
-                        </TouchableOpacity>
+                        <View style={styles.dayHeaderButtons}>
+                          <TouchableOpacity
+                            style={styles.dayActionButton}
+                            onPress={() =>
+                              handleDeleteDay(weeks[weekIndex].id, day.id)
+                            }
+                          >
+                            <Icon name="trash-outline" size={18} color="#666" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.addExerciseButton}
+                            onPress={() =>
+                              handleAddExercise(weeks[weekIndex].id, day.id)
+                            }
+                          >
+                            <Text style={styles.addExerciseIcon}>+</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
                     <View style={styles.exercisesContainer}>
                       {exercises[day.id] &&
-                        exercises[day.id].map((exercise, exIndex) => (
-                          <ExerciseItem
-                            key={exIndex}
-                            exercise={exercise}
-                            index={exIndex}
-                            weekIndex={weekIndex}
-                            dayIndex={index}
-                          />
-                        ))}
+                        [...exercises[day.id]]
+                          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                          .map((exercise, exIndex) => (
+                            <ExerciseItem
+                              key={exIndex}
+                              exercise={exercise}
+                              index={exIndex}
+                              weekIndex={weekIndex}
+                              dayIndex={index}
+                            />
+                          ))}
                     </View>
                     {!isAthlete && (
-                      <TouchableOpacity
-                        style={styles.bottomAddExerciseButton}
-                        onPress={() =>
-                          handleAddExercise(weeks[weekIndex].id, day.id)
-                        }
-                      >
-                        <View style={styles.bottomAddExerciseContent}>
-                          <Icon name="add-outline" size={20} color="#666" />
-                          <Text style={styles.bottomAddExerciseText}>
-                            Add Exercise
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
+                      <>
+                        <TouchableOpacity
+                          style={styles.bottomAddExerciseButton}
+                          onPress={() =>
+                            handleAddExercise(weeks[weekIndex].id, day.id)
+                          }
+                        >
+                          <View style={styles.bottomAddExerciseContent}>
+                            <Icon name="add-outline" size={20} color="#666" />
+                            <Text style={styles.bottomAddExerciseText}>
+                              Add Exercise
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                        {index === days[weeks[weekIndex].id].length - 1 && (
+                          <TouchableOpacity
+                            style={[
+                              styles.bottomAddExerciseButton,
+                              styles.addDayButton,
+                            ]}
+                            onPress={() => handleAddDay(weeks[weekIndex].id)}
+                          >
+                            <View style={styles.bottomAddExerciseContent}>
+                              <Icon
+                                name="calendar-outline"
+                                size={20}
+                                color="#666"
+                              />
+                              <Text style={styles.bottomAddExerciseText}>
+                                Add Day
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        )}
+                      </>
                     )}
                   </View>
                 ))}
@@ -1257,22 +1570,26 @@ const WorkoutProgram = ({ route }) => {
                       {weekNames[index]}
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.renameButton}
-                    onPress={() => handleRenameWeek(index)}
-                  >
-                    <Icon name="pencil-outline" size={14} color="#666" />
-                  </TouchableOpacity>
+                  {!isAthlete && (
+                    <TouchableOpacity
+                      style={styles.renameButton}
+                      onPress={() => handleRenameWeek(index)}
+                    >
+                      <Icon name="pencil-outline" size={14} color="#666" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
           </ScrollView>
 
-          <TouchableOpacity
-            style={styles.addWeekButton}
-            onPress={handleAddWeek}
-          >
-            <Icon name="add" size={24} color="#000" />
-          </TouchableOpacity>
+          {!isAthlete && (
+            <TouchableOpacity
+              style={styles.addWeekButton}
+              onPress={handleAddWeek}
+            >
+              <Icon name="add" size={24} color="#000" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -1308,6 +1625,43 @@ const WorkoutProgram = ({ route }) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <Modal
+        visible={isBlockRenameModalVisible}
+        transparent
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsBlockRenameModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rename Block</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempBlockName}
+              onChangeText={setTempBlockName}
+              placeholder="Enter block name"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setIsBlockRenameModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={saveBlockName}
+              >
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -1329,12 +1683,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#000",
-    marginLeft: 30, // To offset from the back button
-    marginTop: -16,
-    letterSpacing: 0.3,
+    fontSize: 24,
+    fontWeight: "600",
+    marginBottom: 5,
   },
   backButton: {
     marginTop: -40,
@@ -1350,7 +1701,12 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
     justifyContent: "center",
-    marginLeft: 10,
+    marginLeft: 30,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   subtitle: {
     fontSize: 13,
@@ -1362,7 +1718,7 @@ const styles = StyleSheet.create({
     width: width,
     paddingHorizontal: 16,
     paddingTop: 4,
-    paddingBottom: 44,
+    paddingBottom: 150,
   },
   daySection: {
     marginBottom: 16,
@@ -1388,10 +1744,9 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   dayTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#000",
-    letterSpacing: 0.3,
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 4,
   },
   addExerciseButton: {
     padding: 2,
@@ -1408,17 +1763,10 @@ const styles = StyleSheet.create({
   },
   exercise: {
     marginBottom: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "#f8f8f8",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#f0f0f0",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowRadius: 4,
-    elevation: 2,
     width: "85%",
     alignSelf: "center",
   },
@@ -1470,7 +1818,7 @@ const styles = StyleSheet.create({
   schemeInput: {
     fontSize: 13,
     color: "#000",
-    fontWeight: "500",
+    fontWeight: "600",
     padding: 0,
   },
   weightInput: {
@@ -1486,7 +1834,7 @@ const styles = StyleSheet.create({
   weightTextInput: {
     fontSize: 13,
     color: "#000",
-    fontWeight: "500",
+    fontWeight: "600",
     padding: 0,
     minWidth: 30,
     textAlign: "right",
@@ -1498,7 +1846,7 @@ const styles = StyleSheet.create({
   weightUnit: {
     fontSize: 13,
     color: "#666",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   noteContainer: {
     marginTop: 6,
@@ -1517,6 +1865,7 @@ const styles = StyleSheet.create({
     color: "#000",
     lineHeight: 16,
     padding: 0,
+    fontWeight: "600",
   },
   weekNavigation: {
     position: "absolute",
@@ -1775,6 +2124,7 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: "#4a90e2",
+    marginLeft: 100,
   },
   sendButtonText: {
     color: "#fff",
@@ -1791,6 +2141,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
+  },
+  dayHeaderButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  dayActionButton: {
+    padding: 2,
+  },
+  addDayButton: {
+    marginTop: 4,
+    marginBottom: 36,
+    backgroundColor: "#f0f0f0",
+  },
+  blockRenameButton: {
+    padding: 4,
   },
 });
 

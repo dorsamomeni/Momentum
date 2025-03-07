@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -35,39 +36,58 @@ const formatDate = (date) => {
     // Handle different possible date formats
     let jsDate;
 
-    if (date.toDate) {
-      // Firestore Timestamp
+    // Check if it's a Firestore Timestamp
+    if (
+      typeof date === "object" &&
+      date.toDate &&
+      typeof date.toDate === "function"
+    ) {
       jsDate = date.toDate();
-    } else if (date.seconds && date.nanoseconds) {
-      // Firestore Timestamp-like object
+    }
+    // Check if it's a Firestore Timestamp-like object
+    else if (
+      date &&
+      typeof date === "object" &&
+      "seconds" in date &&
+      "nanoseconds" in date
+    ) {
       jsDate = new Date(date.seconds * 1000 + date.nanoseconds / 1000000);
-    } else if (date instanceof Date) {
-      // JavaScript Date object
+    }
+    // Check if it's already a Date object
+    else if (date instanceof Date) {
       jsDate = date;
-    } else if (typeof date === "string") {
-      // Date string
+    }
+    // Check if it's a string
+    else if (typeof date === "string") {
       jsDate = new Date(date);
-    } else if (typeof date === "number") {
-      // Timestamp in milliseconds
+    }
+    // Check if it's a number (milliseconds)
+    else if (typeof date === "number") {
       jsDate = new Date(date);
     } else {
-      // Unknown format
+      console.warn("Unknown date format:", JSON.stringify(date));
       return "Invalid date";
     }
 
     // Validate the date is valid
     if (isNaN(jsDate.getTime())) {
+      console.warn("Invalid date object created from:", JSON.stringify(date));
       return "Invalid date";
     }
 
-    // Format the date as MM/DD/YYYY
+    // Format the date as MMM DD, YYYY
     return jsDate.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     });
   } catch (error) {
-    console.error("Error formatting date:", error, date);
+    console.error(
+      "Error formatting date:",
+      error,
+      "Date value:",
+      JSON.stringify(date)
+    );
     return "Invalid date";
   }
 };
@@ -76,707 +96,35 @@ const ClientDetails = ({ route }) => {
   const navigation = useNavigation();
   const { client } = route.params;
 
-  // Change currentBlock to activeBlocks array
+  // States
   const [activeBlocks, setActiveBlocks] = useState([]);
-
-  const [previousBlocks, setPreviousBlocks] = useState([
-    {
-      id: 2,
-      name: "Volume Block",
-      startDate: "Feb 1, 2024",
-      endDate: "Feb 28, 2024",
-      status: "completed",
-      sessionsPerWeek: 4,
-      weeks: [
-        {
-          exercises: [
-            {
-              // Day 1 - Squat Focus
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "5 x 5 @ RPE 7",
-                  weight: "140",
-                  notes: "2 count pause at bottom",
-                },
-                {
-                  name: "Tempo Squat",
-                  scheme: "3 x 5 @ RPE 6",
-                  weight: "120",
-                  notes: "3-1-0 tempo",
-                },
-                {
-                  name: "Belt Squat",
-                  scheme: "3 x 12",
-                  weight: "80",
-                  notes: "Focus on quad drive",
-                },
-              ],
-            },
-            {
-              // Day 2 - Bench Focus
-              exercises: [
-                {
-                  name: "Competition Bench",
-                  scheme: "5 x 5 @ RPE 7",
-                  weight: "100",
-                  notes: "1 count pause",
-                },
-                {
-                  name: "Close Grip Bench",
-                  scheme: "4 x 8 @ RPE 7",
-                  weight: "85",
-                  notes: "Index finger on rings",
-                },
-                {
-                  name: "DB Bench",
-                  scheme: "3 x 12",
-                  weight: "30",
-                  notes: "Each dumbbell",
-                },
-              ],
-            },
-            {
-              // Day 3 - Deadlift Focus
-              exercises: [
-                {
-                  name: "Competition Deadlift",
-                  scheme: "5 x 3 @ RPE 7",
-                  weight: "180",
-                  notes: "Dead stop each rep",
-                },
-                {
-                  name: "Paused Deadlift",
-                  scheme: "3 x 3 @ RPE 6",
-                  weight: "160",
-                  notes: "2 inch off floor pause",
-                },
-                {
-                  name: "Good Morning",
-                  scheme: "3 x 10",
-                  weight: "60",
-                  notes: "Hinge pattern focus",
-                },
-              ],
-            },
-            {
-              // Day 4 - Variation Day
-              exercises: [
-                {
-                  name: "SSB Squat",
-                  scheme: "4 x 8",
-                  weight: "120",
-                  notes: "Control descent",
-                },
-                {
-                  name: "Incline Bench",
-                  scheme: "4 x 10",
-                  weight: "75",
-                  notes: "30 degree angle",
-                },
-                {
-                  name: "Block Pull",
-                  scheme: "3 x 5",
-                  weight: "170",
-                  notes: "3 inch blocks",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          exercises: [
-            {
-              // Day 1 - Squat Focus
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "5 x 5 @ RPE 7.5",
-                  weight: "145",
-                  notes: "1 count pause",
-                },
-                {
-                  name: "Tempo Squat",
-                  scheme: "3 x 5 @ RPE 7",
-                  weight: "125",
-                  notes: "3-1-0 tempo",
-                },
-              ],
-            },
-            {
-              // Day 2 - Bench Focus
-              exercises: [
-                {
-                  name: "Competition Bench",
-                  scheme: "5 x 5 @ RPE 7.5",
-                  weight: "105",
-                  notes: "1 count pause",
-                },
-                {
-                  name: "Close Grip Bench",
-                  scheme: "4 x 8 @ RPE 7",
-                  weight: "85",
-                  notes: "Index finger on rings",
-                },
-                {
-                  name: "DB Bench",
-                  scheme: "3 x 12",
-                  weight: "30",
-                  notes: "Each dumbbell",
-                },
-              ],
-            },
-            {
-              // Day 3 - Deadlift Focus
-              exercises: [
-                {
-                  name: "Competition Deadlift",
-                  scheme: "5 x 3 @ RPE 7",
-                  weight: "180",
-                  notes: "Dead stop each rep",
-                },
-                {
-                  name: "Paused Deadlift",
-                  scheme: "3 x 3 @ RPE 6",
-                  weight: "160",
-                  notes: "2 inch off floor pause",
-                },
-                {
-                  name: "Good Morning",
-                  scheme: "3 x 10",
-                  weight: "60",
-                  notes: "Hinge pattern focus",
-                },
-              ],
-            },
-            {
-              // Day 4 - Variation Day
-              exercises: [
-                {
-                  name: "SSB Squat",
-                  scheme: "4 x 8",
-                  weight: "120",
-                  notes: "Control descent",
-                },
-                {
-                  name: "Incline Bench",
-                  scheme: "4 x 10",
-                  weight: "75",
-                  notes: "30 degree angle",
-                },
-                {
-                  name: "Block Pull",
-                  scheme: "3 x 5",
-                  weight: "170",
-                  notes: "3 inch blocks",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          exercises: [
-            {
-              // Day 1 - Squat Focus
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "4 x 5 @ RPE 8",
-                  weight: "150",
-                  notes: "Competition commands",
-                },
-                {
-                  name: "Tempo Squat",
-                  scheme: "3 x 5 @ RPE 7.5",
-                  weight: "130",
-                  notes: "3-1-0 tempo",
-                },
-              ],
-            },
-            {
-              // Day 2 - Bench Focus
-              exercises: [
-                {
-                  name: "Competition Bench",
-                  scheme: "4 x 5 @ RPE 8",
-                  weight: "105",
-                  notes: "Competition commands",
-                },
-                {
-                  name: "Close Grip Bench",
-                  scheme: "4 x 8 @ RPE 7",
-                  weight: "85",
-                  notes: "Index finger on rings",
-                },
-                {
-                  name: "DB Bench",
-                  scheme: "3 x 12",
-                  weight: "30",
-                  notes: "Each dumbbell",
-                },
-              ],
-            },
-            {
-              // Day 3 - Deadlift Focus
-              exercises: [
-                {
-                  name: "Competition Deadlift",
-                  scheme: "5 x 3 @ RPE 7",
-                  weight: "180",
-                  notes: "Dead stop each rep",
-                },
-                {
-                  name: "Paused Deadlift",
-                  scheme: "3 x 3 @ RPE 6",
-                  weight: "160",
-                  notes: "2 inch deficit",
-                },
-                {
-                  name: "Good Morning",
-                  scheme: "3 x 10",
-                  weight: "60",
-                  notes: "Hinge pattern focus",
-                },
-              ],
-            },
-            {
-              // Day 4 - Variation Day
-              exercises: [
-                {
-                  name: "SSB Squat",
-                  scheme: "4 x 8",
-                  weight: "120",
-                  notes: "Control descent",
-                },
-                {
-                  name: "Incline Bench",
-                  scheme: "4 x 10",
-                  weight: "75",
-                  notes: "30 degree angle",
-                },
-                {
-                  name: "Block Pull",
-                  scheme: "3 x 5",
-                  weight: "170",
-                  notes: "3 inch blocks",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          exercises: [
-            {
-              // Day 1 - Squat Focus
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "3 x 5 @ RPE 6.5",
-                  weight: "135",
-                  notes: "Speed focus",
-                },
-                {
-                  name: "Tempo Squat",
-                  scheme: "2 x 5 @ RPE 6",
-                  weight: "115",
-                  notes: "3-1-0 tempo",
-                },
-              ],
-            },
-            {
-              // Day 2 - Bench Focus
-              exercises: [
-                {
-                  name: "Competition Bench",
-                  scheme: "3 x 5 @ RPE 6.5",
-                  weight: "105",
-                  notes: "Technique focus",
-                },
-                {
-                  name: "Close Grip Bench",
-                  scheme: "4 x 8 @ RPE 7",
-                  weight: "85",
-                  notes: "Index finger on rings",
-                },
-                {
-                  name: "DB Bench",
-                  scheme: "3 x 12",
-                  weight: "30",
-                  notes: "Each dumbbell",
-                },
-              ],
-            },
-            {
-              // Day 3 - Deadlift Focus
-              exercises: [
-                {
-                  name: "Competition Deadlift",
-                  scheme: "5 x 3 @ RPE 7",
-                  weight: "180",
-                  notes: "Dead stop each rep",
-                },
-                {
-                  name: "Paused Deadlift",
-                  scheme: "3 x 3 @ RPE 6",
-                  weight: "160",
-                  notes: "2 inch deficit",
-                },
-                {
-                  name: "Good Morning",
-                  scheme: "3 x 10",
-                  weight: "60",
-                  notes: "Hinge pattern focus",
-                },
-              ],
-            },
-            {
-              // Day 4 - Variation Day
-              exercises: [
-                {
-                  name: "SSB Squat",
-                  scheme: "4 x 8",
-                  weight: "120",
-                  notes: "Control descent",
-                },
-                {
-                  name: "Incline Bench",
-                  scheme: "4 x 10",
-                  weight: "75",
-                  notes: "30 degree angle",
-                },
-                {
-                  name: "Block Pull",
-                  scheme: "3 x 5",
-                  weight: "170",
-                  notes: "3 inch blocks",
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: 3,
-      name: "Intensity Block",
-      startDate: "Jan 1, 2024",
-      endDate: "Jan 28, 2024",
-      status: "completed",
-      sessionsPerWeek: 3,
-      weeks: [
-        {
-          exercises: [
-            {
-              // Day 1 - SBD Heavy
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "3 x 3 @ RPE 8",
-                  weight: "160",
-                  notes: "Competition commands",
-                },
-                {
-                  name: "Competition Bench",
-                  scheme: "3 x 3 @ RPE 8",
-                  weight: "115",
-                  notes: "Competition pause",
-                },
-                {
-                  name: "Competition Deadlift",
-                  scheme: "2 x 2 @ RPE 8",
-                  weight: "200",
-                  notes: "Competition setup",
-                },
-              ],
-            },
-            {
-              // Day 2 - Technique Work
-              exercises: [
-                {
-                  name: "Pin Squat",
-                  scheme: "4 x 2 @ RPE 7",
-                  weight: "150",
-                  notes: "Below parallel",
-                },
-                {
-                  name: "Spoto Press",
-                  scheme: "4 x 3 @ RPE 7",
-                  weight: "105",
-                  notes: "1 inch off chest",
-                },
-                {
-                  name: "Deficit Deadlift",
-                  scheme: "3 x 3 @ RPE 7",
-                  weight: "180",
-                  notes: "2 inch deficit",
-                },
-              ],
-            },
-            {
-              // Day 3 - Volume Work
-              exercises: [
-                {
-                  name: "Front Squat",
-                  scheme: "3 x 5 @ RPE 7",
-                  weight: "120",
-                  notes: "Maintain position",
-                },
-                {
-                  name: "Larsen Press",
-                  scheme: "3 x 6 @ RPE 7",
-                  weight: "95",
-                  notes: "Feet up",
-                },
-                {
-                  name: "RDL",
-                  scheme: "3 x 8 @ RPE 7",
-                  weight: "150",
-                  notes: "Slow eccentric",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          exercises: [
-            {
-              // Day 1 - SBD Heavy
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "3 x 3 @ RPE 8.5",
-                  weight: "165",
-                  notes: "Competition commands",
-                },
-                {
-                  name: "Competition Bench",
-                  scheme: "3 x 3 @ RPE 8.5",
-                  weight: "117.5",
-                  notes: "Competition pause",
-                },
-                {
-                  name: "Competition Deadlift",
-                  scheme: "2 x 2 @ RPE 8.5",
-                  weight: "200",
-                  notes: "Competition setup",
-                },
-              ],
-            },
-            {
-              // Day 2 - Technique Work
-              exercises: [
-                {
-                  name: "Pin Squat",
-                  scheme: "4 x 2 @ RPE 7.5",
-                  weight: "150",
-                  notes: "Below parallel",
-                },
-                {
-                  name: "Spoto Press",
-                  scheme: "4 x 3 @ RPE 7.5",
-                  weight: "105",
-                  notes: "1 inch off chest",
-                },
-                {
-                  name: "Deficit Deadlift",
-                  scheme: "3 x 3 @ RPE 7.5",
-                  weight: "180",
-                  notes: "2 inch deficit",
-                },
-              ],
-            },
-            {
-              // Day 3 - Volume Work
-              exercises: [
-                {
-                  name: "Front Squat",
-                  scheme: "3 x 5 @ RPE 7",
-                  weight: "120",
-                  notes: "Maintain position",
-                },
-                {
-                  name: "Larsen Press",
-                  scheme: "3 x 6 @ RPE 7",
-                  weight: "95",
-                  notes: "Feet up",
-                },
-                {
-                  name: "RDL",
-                  scheme: "3 x 8 @ RPE 7",
-                  weight: "150",
-                  notes: "Slow eccentric",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          exercises: [
-            {
-              // Day 1 - SBD Heavy
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "2 x 2 @ RPE 9",
-                  weight: "170",
-                  notes: "Competition commands",
-                },
-                {
-                  name: "Competition Bench",
-                  scheme: "2 x 2 @ RPE 9",
-                  weight: "120",
-                  notes: "Competition pause",
-                },
-                {
-                  name: "Competition Deadlift",
-                  scheme: "2 x 2 @ RPE 9",
-                  weight: "200",
-                  notes: "Competition setup",
-                },
-              ],
-            },
-            {
-              // Day 2 - Technique Work
-              exercises: [
-                {
-                  name: "Pin Squat",
-                  scheme: "4 x 2 @ RPE 8",
-                  weight: "150",
-                  notes: "Below parallel",
-                },
-                {
-                  name: "Spoto Press",
-                  scheme: "4 x 3 @ RPE 8",
-                  weight: "105",
-                  notes: "1 inch off chest",
-                },
-                {
-                  name: "Deficit Deadlift",
-                  scheme: "3 x 3 @ RPE 8",
-                  weight: "180",
-                  notes: "2 inch deficit",
-                },
-              ],
-            },
-            {
-              // Day 3 - Volume Work
-              exercises: [
-                {
-                  name: "Front Squat",
-                  scheme: "3 x 5 @ RPE 7",
-                  weight: "120",
-                  notes: "Maintain position",
-                },
-                {
-                  name: "Larsen Press",
-                  scheme: "3 x 6 @ RPE 7",
-                  weight: "95",
-                  notes: "Feet up",
-                },
-                {
-                  name: "RDL",
-                  scheme: "3 x 8 @ RPE 7",
-                  weight: "150",
-                  notes: "Slow eccentric",
-                },
-              ],
-            },
-          ],
-        },
-        {
-          exercises: [
-            {
-              // Day 1 - SBD Heavy
-              exercises: [
-                {
-                  name: "Competition Squat",
-                  scheme: "2 x 2 @ RPE 7",
-                  weight: "150",
-                  notes: "Speed focus",
-                },
-                {
-                  name: "Competition Bench",
-                  scheme: "2 x 2 @ RPE 7",
-                  weight: "105",
-                  notes: "Technique focus",
-                },
-                {
-                  name: "Competition Deadlift",
-                  scheme: "2 x 2 @ RPE 7",
-                  weight: "180",
-                  notes: "Speed focus",
-                },
-              ],
-            },
-            {
-              // Day 2 - Technique Work
-              exercises: [
-                {
-                  name: "Pin Squat",
-                  scheme: "4 x 2 @ RPE 7",
-                  weight: "150",
-                  notes: "Below parallel",
-                },
-                {
-                  name: "Spoto Press",
-                  scheme: "4 x 3 @ RPE 7",
-                  weight: "105",
-                  notes: "1 inch off chest",
-                },
-                {
-                  name: "Deficit Deadlift",
-                  scheme: "3 x 3 @ RPE 7",
-                  weight: "180",
-                  notes: "2 inch deficit",
-                },
-              ],
-            },
-            {
-              // Day 3 - Volume Work
-              exercises: [
-                {
-                  name: "Front Squat",
-                  scheme: "3 x 5 @ RPE 7",
-                  weight: "120",
-                  notes: "Maintain position",
-                },
-                {
-                  name: "Larsen Press",
-                  scheme: "3 x 6 @ RPE 7",
-                  weight: "95",
-                  notes: "Feet up",
-                },
-                {
-                  name: "RDL",
-                  scheme: "3 x 8 @ RPE 7",
-                  weight: "150",
-                  notes: "Slow eccentric",
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  ]);
-
+  const [previousBlocks, setPreviousBlocks] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isBlockRenameModalVisible, setIsBlockRenameModalVisible] =
     useState(false);
   const [selectedBlock, setSelectedBlock] = useState(null);
   const [tempBlockName, setTempBlockName] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Initial data loading
+  useEffect(() => {
+    fetchUserBlocks();
+  }, []);
+
+  // Refresh data whenever the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       console.log("ClientDetails screen focused - refreshing block data");
       fetchUserBlocks();
-
-      // Return a cleanup function
-      return () => {
-        // Any cleanup if needed
-      };
-    }, [route.params.client.id]) // Re-run if client ID changes
+    }, [])
   );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchUserBlocks().then(() => {
+      setRefreshing(false);
+    });
+  }, []);
 
   const handleNewBlock = async (
     blockName,
@@ -787,6 +135,15 @@ const ClientDetails = ({ route }) => {
     try {
       console.log("Creating new block:", blockName);
 
+      // Ensure dates are properly formatted for Firestore
+      const startDateToUse = startDate || new Date();
+      const endDateToUse =
+        endDate || new Date(new Date().setDate(new Date().getDate() + 28));
+
+      // Log date objects for debugging
+      console.log("Start date:", startDateToUse);
+      console.log("End date:", endDateToUse);
+
       // Create new block using our new structure with user-selected dates
       const newBlock = {
         name: blockName,
@@ -794,9 +151,8 @@ const ClientDetails = ({ route }) => {
         athleteId: route.params.client.id,
         status: "active",
         sessionsPerWeek,
-        startDate: startDate || new Date(), // Use provided date or today
-        endDate:
-          endDate || new Date(new Date().setDate(new Date().getDate() + 28)), // Use provided date or 4 weeks from today
+        startDate: startDateToUse,
+        endDate: endDateToUse,
       };
 
       // Add console log before updating Firebase
@@ -834,7 +190,7 @@ const ClientDetails = ({ route }) => {
         blockId: blockId,
         weekNumber: 1, // Only week 1
         daysPerWeek: sessionsPerWeek,
-        startDate: startDate || new Date(),
+        startDate: startDateToUse,
         submittedAt: serverTimestamp(),
       });
 
@@ -883,62 +239,18 @@ const ClientDetails = ({ route }) => {
         }
 
         // Format dates for display with error handling
-        if (blockData.startDate) {
-          try {
-            if (
-              typeof blockData.startDate === "object" &&
-              blockData.startDate.toDate
-            ) {
-              blockData.startDate = blockData.startDate
-                .toDate()
-                .toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                });
-            } else if (blockData.startDate instanceof Date) {
-              blockData.startDate = blockData.startDate.toLocaleDateString(
-                "en-US",
-                {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                }
-              );
-            }
-          } catch (e) {
-            console.error("Error formatting startDate:", e);
-            blockData.startDate = "Unknown date";
+        try {
+          if (blockData.startDate) {
+            blockData.startDate = formatDate(blockData.startDate);
           }
-        }
 
-        if (blockData.endDate) {
-          try {
-            if (
-              typeof blockData.endDate === "object" &&
-              blockData.endDate.toDate
-            ) {
-              blockData.endDate = blockData.endDate
-                .toDate()
-                .toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                });
-            } else if (blockData.endDate instanceof Date) {
-              blockData.endDate = blockData.endDate.toLocaleDateString(
-                "en-US",
-                {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                }
-              );
-            }
-          } catch (e) {
-            console.error("Error formatting endDate:", e);
-            blockData.endDate = "Unknown date";
+          if (blockData.endDate) {
+            blockData.endDate = formatDate(blockData.endDate);
           }
+        } catch (e) {
+          console.error("Error formatting dates:", e);
+          blockData.startDate = blockData.startDate ? "Unknown date" : "";
+          blockData.endDate = blockData.endDate ? "Unknown date" : "";
         }
 
         // Sort by status with validation
@@ -989,6 +301,7 @@ const ClientDetails = ({ route }) => {
       console.error("Error fetching blocks:", error);
       Alert.alert("Error", "Failed to load training blocks");
     }
+    return Promise.resolve(); // Make sure to return a Promise for onRefresh
   };
 
   const handleCloseBlock = async (blockToClose) => {
@@ -1380,24 +693,39 @@ const ClientDetails = ({ route }) => {
     setIsBlockRenameModalVisible(true);
   };
 
-  const saveBlockName = () => {
+  const saveBlockName = async () => {
     if (selectedBlock && tempBlockName.trim()) {
-      if (selectedBlock.status === "active") {
-        setActiveBlocks(
-          activeBlocks.map((block) =>
-            block.id === selectedBlock.id
-              ? { ...block, name: tempBlockName.trim() }
-              : block
-          )
+      try {
+        // First update in Firestore
+        await updateDoc(doc(db, "blocks", selectedBlock.id), {
+          name: tempBlockName.trim(),
+          lastUpdated: serverTimestamp(),
+        });
+
+        // Then update local state
+        if (selectedBlock.status === "active") {
+          setActiveBlocks(
+            activeBlocks.map((block) =>
+              block.id === selectedBlock.id
+                ? { ...block, name: tempBlockName.trim() }
+                : block
+            )
+          );
+        } else {
+          setPreviousBlocks(
+            previousBlocks.map((block) =>
+              block.id === selectedBlock.id
+                ? { ...block, name: tempBlockName.trim() }
+                : block
+            )
+          );
+        }
+        console.log(
+          "Block name updated successfully in Firestore and local state"
         );
-      } else {
-        setPreviousBlocks(
-          previousBlocks.map((block) =>
-            block.id === selectedBlock.id
-              ? { ...block, name: tempBlockName.trim() }
-              : block
-          )
-        );
+      } catch (error) {
+        console.error("Error updating block name:", error);
+        Alert.alert("Error", "Failed to update block name. Please try again.");
       }
     }
     setIsBlockRenameModalVisible(false);
@@ -1627,7 +955,7 @@ const ClientDetails = ({ route }) => {
           </View>
         </View>
         <Text style={styles.dateText}>
-          {formatDate(block.startDate)} - {formatDate(block.endDate)}
+          {block.startDate} - {block.endDate}
         </Text>
       </TouchableOpacity>
     );
@@ -1642,7 +970,18 @@ const ClientDetails = ({ route }) => {
         <Text style={styles.backButtonText}>←</Text>
       </TouchableOpacity>
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#000000"
+            title="Refreshing..."
+            titleColor="#000000"
+          />
+        }
+      >
         <View style={styles.clientHeader}>
           <View style={styles.clientInfo}>
             <View style={[styles.profilePhoto, { backgroundColor: "#A8E6CF" }]}>
@@ -1831,7 +1170,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   previousTitle: {
-    marginTop: 30,
+    marginTop: 16,
   },
   blockCard: {
     backgroundColor: "#f8f8f8",

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,9 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  RefreshControl,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { auth, db } from "../src/config/firebase";
 import {
@@ -30,150 +31,190 @@ const AthleteHome = () => {
   const [userData, setUserData] = useState(null);
   const [coachData, setCoachData] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   console.log("AthleteHome component rendering");
 
+  // Initial data loading
   useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          const data = userDoc.data();
-          setUserData(data);
-
-          // Instead of using data.activeBlocks directly,
-          // we'll fetch blocks from the blocks collection
-          const blocksQuery = query(
-            collection(db, "blocks"),
-            where("athleteId", "==", user.uid)
-          );
-
-          const blocksSnapshot = await getDocs(blocksQuery);
-          const activeBlocksData = [];
-          const previousBlocksData = [];
-
-          blocksSnapshot.forEach((doc) => {
-            const blockData = { id: doc.id, ...doc.data() };
-
-            // Format dates for display
-            if (blockData.startDate) {
-              const startDate = blockData.startDate.toDate
-                ? blockData.startDate.toDate()
-                : new Date(blockData.startDate);
-
-              blockData.startDate = startDate.toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              });
-            }
-
-            if (blockData.endDate) {
-              const endDate = blockData.endDate.toDate
-                ? blockData.endDate.toDate()
-                : new Date(blockData.endDate);
-
-              blockData.endDate = endDate.toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              });
-            }
-
-            // Sort by status
-            if (blockData.status === "active") {
-              activeBlocksData.push(blockData);
-            } else {
-              previousBlocksData.push(blockData);
-            }
-          });
-
-          setActiveBlocks(activeBlocksData);
-          setPreviousBlocks(previousBlocksData);
-
-          // Fetch coach data if coachId exists
-          if (data.coachId) {
-            const coachDoc = await getDoc(doc(db, "users", data.coachId));
-            if (coachDoc.exists()) {
-              setCoachData({
-                id: data.coachId,
-                ...coachDoc.data(),
-              });
-            }
-          } else {
-            setCoachData(null); // Reset coach data if no coach is assigned
-          }
-        }
-      } catch (error) {
-        console.error("Error loading user data:", error);
-      }
-    };
-
     loadUserData();
   }, []);
 
+  // Refresh data whenever the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log("AthleteHome screen focused - refreshing block data");
+      loadUserData();
+    }, [])
+  );
+
+  const onRefresh = useCallback(() => {
+    console.log("Pull-to-refresh triggered");
+    setRefreshing(true);
+
+    // Explicitly use Promise handling for the refresh
+    Promise.resolve()
+      .then(() => loadUserData())
+      .catch((error) => {
+        console.error("Error during refresh:", error);
+      })
+      .finally(() => {
+        console.log("Refresh completed, setting refreshing to false");
+        setRefreshing(false);
+      });
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const data = userDoc.data();
+        setUserData(data);
+
+        // Instead of using data.activeBlocks directly,
+        // we'll fetch blocks from the blocks collection
+        const blocksQuery = query(
+          collection(db, "blocks"),
+          where("athleteId", "==", user.uid)
+        );
+
+        const blocksSnapshot = await getDocs(blocksQuery);
+        const activeBlocksData = [];
+        const previousBlocksData = [];
+
+        blocksSnapshot.forEach((doc) => {
+          const blockData = { id: doc.id, ...doc.data() };
+
+          // Format dates for display
+          if (blockData.startDate) {
+            const startDate = blockData.startDate.toDate
+              ? blockData.startDate.toDate()
+              : new Date(blockData.startDate);
+
+            blockData.startDate = startDate.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+          }
+
+          if (blockData.endDate) {
+            const endDate = blockData.endDate.toDate
+              ? blockData.endDate.toDate()
+              : new Date(blockData.endDate);
+
+            blockData.endDate = endDate.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+          }
+
+          // Sort by status
+          if (blockData.status === "active") {
+            activeBlocksData.push(blockData);
+          } else {
+            previousBlocksData.push(blockData);
+          }
+        });
+
+        setActiveBlocks(activeBlocksData);
+        setPreviousBlocks(previousBlocksData);
+
+        // Fetch coach data if coachId exists
+        if (data.coachId) {
+          const coachDoc = await getDoc(doc(db, "users", data.coachId));
+          if (coachDoc.exists()) {
+            setCoachData({
+              id: data.coachId,
+              ...coachDoc.data(),
+            });
+          }
+        } else {
+          setCoachData(null); // Reset coach data if no coach is assigned
+        }
+      }
+    } catch (error) {
+      console.error("Error loading user data:", error);
+    }
+    return Promise.resolve(); // Make sure to return a Promise for onRefresh
+  };
+
   const handleRemoveCoach = async () => {
     try {
-      const athleteId = auth.currentUser.uid;
-      const coachId = userData.coachId;
+      const user = auth.currentUser;
+      if (!user) return;
 
-      // Update athlete document
-      const athleteRef = doc(db, "users", athleteId);
-      await updateDoc(athleteRef, {
-        coachId: null,
-        status: "inactive",
-        sentRequests: arrayRemove(coachId),
-        coachRequests: arrayRemove(coachId),
-      });
+      // Confirm with the user
+      Alert.alert(
+        "Remove Coach",
+        "Are you sure you want to remove your coach?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            onPress: async () => {
+              // Remove coachId from user document
+              await updateDoc(doc(db, "users", user.uid), {
+                coachId: null,
+              });
 
-      // Update coach document
-      const coachRef = doc(db, "users", coachId);
-      await updateDoc(coachRef, {
-        athletes: arrayRemove(athleteId),
-        pendingRequests: arrayRemove(athleteId),
-        sentRequests: arrayRemove(athleteId),
-      });
+              // Remove athlete from coach's document
+              if (coachData && coachData.id) {
+                await updateDoc(doc(db, "users", coachData.id), {
+                  athletes: arrayRemove(user.uid),
+                });
+              }
 
-      // Update local state
-      setCoachData(null);
-      setUserData((prev) => ({
-        ...prev,
-        coachId: null,
-        sentRequests: prev.sentRequests?.filter((id) => id !== coachId) || [],
-        coachRequests: prev.coachRequests?.filter((id) => id !== coachId) || [],
-      }));
+              // Update local state
+              setCoachData(null);
+              Alert.alert("Success", "Coach removed successfully");
+            },
+          },
+        ]
+      );
     } catch (error) {
       console.error("Error removing coach:", error);
       Alert.alert("Error", "Failed to remove coach");
     }
   };
 
-  const renderBlock = (block, isPrevious = false) => (
-    <TouchableOpacity
-      key={block.id}
-      style={[styles.blockCard, isPrevious && styles.previousBlock]}
-      onPress={() =>
-        navigation.navigate("WorkoutProgram", {
-          blockId: block.id,
-          onCloseBlock: () => {},
-          isPreviousBlock: isPrevious,
-          onReopenBlock: () => {},
-          isAthlete: true,
-        })
-      }
-    >
-      <Text style={styles.blockName}>{block.name}</Text>
-      <View style={styles.blockDetails}>
-        <Text style={styles.blockDate}>
+  const renderBlock = (block, isPrevious = false) => {
+    // Define status icon color based on whether it's a previous block
+    const statusIconColor = isPrevious ? "#888888" : "#4CD964"; // Grey for previous, green for active
+
+    return (
+      <TouchableOpacity
+        key={block.id}
+        style={[styles.blockCard, isPrevious && styles.previousBlock]}
+        onPress={() =>
+          navigation.navigate("WorkoutProgram", {
+            blockId: block.id,
+            onCloseBlock: () => {},
+            isPreviousBlock: isPrevious,
+            onReopenBlock: () => {},
+            isAthlete: true,
+          })
+        }
+      >
+        <View style={styles.blockHeader}>
+          <View style={styles.blockTitleContainer}>
+            <Icon
+              name="ellipse"
+              size={12}
+              color={statusIconColor}
+              style={styles.statusIcon}
+            />
+            <Text style={styles.blockName}>{block.name}</Text>
+          </View>
+        </View>
+        <Text style={styles.dateText}>
           {block.startDate} - {block.endDate}
         </Text>
-        <Text style={styles.sessionsPerWeek}>
-          {block.sessionsPerWeek} sessions/week
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const filterBlocks = (blocks) => {
     return blocks.filter((block) =>
@@ -190,21 +231,21 @@ const AthleteHome = () => {
             style={styles.button}
             onPress={() => navigation.navigate("CoachRequests")}
           >
-            <Icon name="add-circle" size={16} color="#000" />
+            <Icon name="add-circle" size={14} color="#000" />
             <Text style={styles.buttonText}>Requests</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.button}
-            onPress={() => navigation.navigate("AddClient")}
+            onPress={() => navigation.navigate("FindCoach")}
           >
-            <Icon name="people" size={16} color="#000" />
+            <Icon name="people" size={14} color="#000" />
             <Text style={styles.buttonText}>Add Coach</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.coachSection}>
-        <Text style={styles.sectionTitle}>Coach</Text>
+        <Text style={styles.sectionTitle}>My Coach</Text>
         {coachData ? (
           <View style={styles.coachCard}>
             <View style={styles.coachHeader}>
@@ -229,7 +270,7 @@ const AthleteHome = () => {
                 style={styles.removeButton}
                 onPress={handleRemoveCoach}
               >
-                <Icon name="close-outline" size={24} color="#666" />
+                <Icon name="close" size={20} color="#666" />
               </TouchableOpacity>
             </View>
           </View>
@@ -242,7 +283,7 @@ const AthleteHome = () => {
               style={styles.addCoachButton}
               onPress={() => navigation.navigate("FindCoach")}
             >
-              <Text style={styles.addCoachButtonText}>Find Coach</Text>
+              <Text style={styles.addCoachButtonText}>Find</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -251,9 +292,9 @@ const AthleteHome = () => {
       <View style={styles.searchRow}>
         <View style={styles.searchContainer}>
           <Icon
-            name="search"
+            name="search-outline"
             size={20}
-            color="#999"
+            color="#666"
             style={styles.searchIcon}
           />
           <TextInput
@@ -261,12 +302,27 @@ const AthleteHome = () => {
             placeholder="Search programs..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
+            placeholderTextColor="#666"
           />
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#000000"
+            colors={["#000000"]}
+            progressBackgroundColor="#ffffff"
+            title="Refreshing..."
+            titleColor="#000000"
+          />
+        }
+        scrollEventThrottle={16}
+      >
         {activeBlocks.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Active Programs</Text>
@@ -276,7 +332,9 @@ const AthleteHome = () => {
 
         {previousBlocks.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Previous Programs</Text>
+            <Text style={[styles.sectionTitle, styles.previousTitle]}>
+              Previous Programs
+            </Text>
             {filterBlocks(previousBlocks).map((block) =>
               renderBlock(block, true)
             )}
@@ -299,86 +357,94 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+    padding: 40,
+    paddingTop: 140,
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    paddingTop: 120,
+    justifyContent: "space-between",
+    marginBottom: 16,
+    padding: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
     backgroundColor: "#fff",
-    marginBottom: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 25,
     fontWeight: "bold",
+    paddingBottom: 0,
   },
   buttonContainer: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
+    marginRight: 10,
   },
   button: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f0f0f0",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
   },
   buttonText: {
     color: "#000",
-    fontSize: 14,
-    marginLeft: 6,
+    fontSize: 12,
+    marginLeft: 4,
     fontWeight: "500",
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 0,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 8,
+    fontWeight: "500",
+    marginBottom: 12,
     color: "#000",
   },
+  previousTitle: {
+    marginTop: 16,
+  },
   blockCard: {
-    backgroundColor: "#fff",
-    padding: 15,
+    backgroundColor: "#f8f8f8",
     borderRadius: 10,
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#eee",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    borderColor: "#f0f0f0",
   },
   previousBlock: {
+    backgroundColor: "#F5F5F5",
+    borderColor: "#DDDDDD",
     opacity: 0.7,
+  },
+  blockHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  blockTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  statusIcon: {
+    marginRight: 8,
   },
   blockName: {
     fontSize: 16,
     fontWeight: "500",
-    marginBottom: 8,
+    marginRight: 8,
+    flex: 1,
   },
-  blockDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  blockDate: {
-    fontSize: 14,
+  dateText: {
     color: "#666",
-  },
-  sessionsPerWeek: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 13,
+    marginTop: 3,
   },
   emptyState: {
     flex: 1,
@@ -391,21 +457,21 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   coachSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     marginBottom: 20,
   },
   coachCard: {
     backgroundColor: "#f8f8f8",
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 8,
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 6,
     borderWidth: 1,
     borderColor: "#f0f0f0",
   },
   coachHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
   coachInfo: {
     flexDirection: "row",
@@ -413,80 +479,90 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profilePhoto: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
   initial: {
     color: "#fff",
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "500",
   },
   coachDetails: {
     marginLeft: 16,
     flex: 1,
   },
   coachName: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "500",
     color: "#000",
-    marginBottom: 4,
+    marginBottom: 3,
   },
   coachUsername: {
     fontSize: 14,
     color: "#666",
   },
   removeButton: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 4,
   },
   noCoachContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#f8f8f8",
-    padding: 15,
+    padding: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#eee",
+    marginTop: 6,
+    flexWrap: "nowrap",
   },
   noCoachText: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#666",
     flex: 1,
+    marginRight: 8,
   },
   addCoachButton: {
     backgroundColor: "#000",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginLeft: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginLeft: 0,
+    minWidth: 70,
   },
   addCoachButtonText: {
     color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "400",
+    textAlign: "center",
   },
   searchRow: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    height: 44,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    gap: 8,
+    paddingHorizontal: 0,
+    marginBottom: 20,
+    paddingTop: 40,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f8f8",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   searchIcon: {
     marginRight: 10,
@@ -494,7 +570,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: "#333",
+    color: "#000",
     height: "100%",
   },
 });
