@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -7,10 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   Keyboard,
-  Dimensions,
+  Platform,
 } from "react-native";
 import { useNavigation, CommonActions } from "@react-navigation/native";
 import { signup } from "../src/auth/signup";
@@ -25,41 +23,13 @@ const SignUp = () => {
   const [password, setPassword] = useState("");
   const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
-  const [scrollViewHeight, setScrollViewHeight] = useState(null);
 
-  // References to input fields for handling return key navigation
+  // Create refs for each input to enable keyboard navigation
   const lastNameRef = useRef(null);
   const usernameRef = useRef(null);
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
-
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        // On Android, ensure the ScrollView knows its maximum height
-        if (Platform.OS === "android" && scrollViewHeight) {
-          const screenHeight = Dimensions.get("window").height;
-          const keyboardHeight = screenHeight * 0.4; // Approximate keyboard height
-          setScrollViewHeight(screenHeight - keyboardHeight - 100);
-        }
-      }
-    );
-
-    const keyboardDidHideListener = Keyboard.addListener(
-      "keyboardDidHide",
-      () => {
-        if (Platform.OS === "android") {
-          setScrollViewHeight(null);
-        }
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, [scrollViewHeight]);
+  const scrollViewRef = useRef(null);
 
   const handleSignUp = async () => {
     if (!firstName || !lastName || !username || !email || !password || !role) {
@@ -99,18 +69,8 @@ const SignUp = () => {
         result.userData.role
       );
 
-      // Role-based navigation
-      if (result.userData.role === "athlete") {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "AthleteHome" }],
-        });
-      } else if (result.userData.role === "coach") {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Clients" }],
-        });
-      }
+      // Navigate to the MaxLifts page first, passing the role
+      navigation.navigate("MaxLifts", { role: result.userData.role });
     } catch (error) {
       console.error("Signup error:", error);
       Alert.alert(
@@ -123,31 +83,23 @@ const SignUp = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : null}
-      style={styles.container}
-      keyboardVerticalOffset={0}
-    >
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.backButtonText}>←</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>Create account</Text>
-
+    <View style={styles.mainContainer}>
       <ScrollView
-        style={[
-          styles.content,
-          scrollViewHeight ? { maxHeight: scrollViewHeight } : null,
-        ]}
+        ref={scrollViewRef}
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="always"
-        contentInset={{ bottom: 0 }}
-        automaticallyAdjustKeyboardInsets={false}
       >
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.title}>Create account</Text>
+
         <View style={styles.inputContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>First Name</Text>
@@ -226,7 +178,20 @@ const SignUp = () => {
                 value={password}
                 onChangeText={setPassword}
                 returnKeyType="done"
-                onSubmitEditing={handleSignUp}
+                onSubmitEditing={() => {
+                  Keyboard.dismiss();
+                  if (
+                    !loading &&
+                    firstName &&
+                    lastName &&
+                    username &&
+                    email &&
+                    password &&
+                    role
+                  ) {
+                    handleSignUp();
+                  }
+                }}
               />
               <TouchableOpacity
                 style={styles.showButton}
@@ -282,22 +247,39 @@ const SignUp = () => {
               {loading ? "Creating account..." : "Create account"}
             </Text>
           </TouchableOpacity>
+
+          {/* Add extra space at the bottom */}
+          <View style={styles.bottomSpace} />
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  mainContainer: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 80, // Extra padding at the bottom
+  },
+  backButton: {
+    marginBottom: 10,
+    marginTop: 40,
+  },
+  backButtonText: {
+    fontSize: 28,
+    color: "#000",
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    marginTop: 60,
     marginBottom: 20,
     textAlign: "center",
   },
@@ -313,29 +295,55 @@ const styles = StyleSheet.create({
     color: "#000",
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
+    backgroundColor: "#f5f5f5",
     padding: 15,
+    borderRadius: 8,
     fontSize: 16,
+    color: "#000",
   },
   passwordContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ccc",
+    backgroundColor: "#f5f5f5",
     borderRadius: 8,
+    alignItems: "center",
   },
   passwordInput: {
     flex: 1,
     padding: 15,
     fontSize: 16,
+    color: "#000",
   },
   showButton: {
-    padding: 15,
+    paddingHorizontal: 15,
   },
   showButtonText: {
-    color: "#666",
+    color: "#000",
+    fontWeight: "500",
+  },
+  roleContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 5,
+  },
+  roleButton: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    marginHorizontal: 5,
+  },
+  selectedRoleButton: {
+    backgroundColor: "#000",
+  },
+  roleText: {
+    color: "#000",
+    fontWeight: "500",
+    fontSize: 16,
+  },
+  selectedRoleText: {
+    color: "#fff",
+    fontWeight: "500",
     fontSize: 16,
   },
   createButton: {
@@ -348,52 +356,13 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
-  },
-  backButton: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    zIndex: 1,
-  },
-  backButtonText: {
-    fontSize: 28,
-    color: "#000",
-  },
-  roleContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  roleButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    alignItems: "center",
-    marginHorizontal: 5,
-  },
-  selectedRoleButton: {
-    backgroundColor: "#000",
-    borderColor: "#000",
-  },
-  roleText: {
-    color: "#000",
-  },
-  selectedRoleText: {
-    color: "#fff",
+    fontWeight: "500",
   },
   disabledButton: {
-    backgroundColor: "#ccc",
+    opacity: 0.5,
   },
-  content: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-    flexGrow: 1,
+  bottomSpace: {
+    height: 80, // Extra space at the bottom to ensure scrollability
   },
 });
 

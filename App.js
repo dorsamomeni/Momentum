@@ -25,6 +25,7 @@ import Templates from "./pages/Templates";
 import EditTemplate from "./pages/EditTemplate";
 import EditTemplateExercise from "./pages/EditTemplateExercise";
 import AddCoach from "./pages/AddCoach";
+import MaxLifts from "./pages/MaxLifts";
 
 const slides = [
   {
@@ -139,6 +140,7 @@ export default function App() {
               <Stack.Screen name="OpeningScreen" component={OpeningScreen} />
               <Stack.Screen name="SignIn" component={SignIn} />
               <Stack.Screen name="SignUp" component={SignUp} />
+              <Stack.Screen name="MaxLifts" component={MaxLifts} />
               <Stack.Screen name="Welcome" component={Welcome} />
               <Stack.Screen
                 name="AthleteHome"
