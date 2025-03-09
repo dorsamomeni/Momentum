@@ -8,17 +8,56 @@ import {
   Modal,
   ScrollView,
   Animated,
+  ActivityIndicator,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { LineChart } from "react-native-chart-kit";
 import { auth, db } from "../src/config/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  arrayUnion,
+  serverTimestamp,
+} from "firebase/firestore";
+
+// Define chart dimensions outside component so they're accessible to styles
+const chartWidth = Dimensions.get("window").width - 85;
+const CHART_HEIGHT = 200; // Constant for chart height used in styles
 
 const AthleteStats = () => {
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [userData, setUserData] = useState(null);
   const [tooltipData, setTooltipData] = useState(null);
   const fadeAnim = useState(new Animated.Value(0))[0];
+  const [isLoading, setIsLoading] = useState(true);
+
+  // State for progression data
+  const [squatData, setSquatData] = useState(null);
+  const [benchData, setBenchData] = useState(null);
+  const [deadliftData, setDeadliftData] = useState(null);
+
+  // State for update modal
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [newSquatMax, setNewSquatMax] = useState("");
+  const [newBenchMax, setNewBenchMax] = useState("");
+  const [newDeadliftMax, setNewDeadliftMax] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // State for current maxes and dates
+  const [currentMaxes, setCurrentMaxes] = useState({
+    squat: { weight: 0, achievedAt: null },
+    bench: { weight: 0, achievedAt: null },
+    deadlift: { weight: 0, achievedAt: null },
+  });
+
+  // State for showing max date modal
+  const [showMaxDateModal, setShowMaxDateModal] = useState(false);
+  const [selectedMax, setSelectedMax] = useState(null);
 
   // Get current year and create array of last 5 years
   const currentYear = new Date().getFullYear();
@@ -53,19 +92,213 @@ const AthleteStats = () => {
     return Math.round((lbs / 2.20462) * 10) / 10; // Convert and round to 1 decimal
   };
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          setUserData(userDoc.data());
-        }
-      } catch (error) {
-        console.error("Error loading user data:", error);
-      }
-    };
+  // Update max lifts
+  const handleUpdateMaxes = async () => {
+    // Validate inputs - at least one field should be filled
+    if (!newSquatMax && !newBenchMax && !newDeadliftMax) {
+      Alert.alert("Error", "Please enter at least one max lift to update");
+      return;
+    }
 
+    // Validate that entered values are valid numbers
+    if (
+      (newSquatMax && isNaN(parseFloat(newSquatMax))) ||
+      (newBenchMax && isNaN(parseFloat(newBenchMax))) ||
+      (newDeadliftMax && isNaN(parseFloat(newDeadliftMax)))
+    ) {
+      Alert.alert("Error", "Please enter valid numbers for all lifts");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      const now = new Date();
+      const analyticsRef = doc(db, "analytics", user.uid);
+
+      // Get current document to check if it exists
+      const analyticsDoc = await getDoc(analyticsRef);
+
+      if (analyticsDoc.exists()) {
+        // Prepare updates object - only include fields that have values
+        const updates = {};
+        const progressionUpdates = {};
+
+        if (newSquatMax) {
+          updates["currentMaxes.squat"] = {
+            weight: parseFloat(newSquatMax),
+            achievedAt: serverTimestamp(),
+          };
+          progressionUpdates["squatProgression"] = arrayUnion({
+            date: now,
+            weight: parseFloat(newSquatMax),
+          });
+        }
+
+        if (newBenchMax) {
+          updates["currentMaxes.bench"] = {
+            weight: parseFloat(newBenchMax),
+            achievedAt: serverTimestamp(),
+          };
+          progressionUpdates["benchProgression"] = arrayUnion({
+            date: now,
+            weight: parseFloat(newBenchMax),
+          });
+        }
+
+        if (newDeadliftMax) {
+          updates["currentMaxes.deadlift"] = {
+            weight: parseFloat(newDeadliftMax),
+            achievedAt: serverTimestamp(),
+          };
+          progressionUpdates["deadliftProgression"] = arrayUnion({
+            date: now,
+            weight: parseFloat(newDeadliftMax),
+          });
+        }
+
+        // Update the current max lifts and progression arrays
+        await updateDoc(analyticsRef, { ...updates, ...progressionUpdates });
+
+        // Refresh data
+        await loadUserData();
+        Alert.alert("Success", "Your max lifts have been updated");
+      } else {
+        Alert.alert(
+          "Error",
+          "Could not update maxes. Analytics data not found."
+        );
+      }
+
+      // Close modal and clear inputs
+      setShowUpdateModal(false);
+      setNewSquatMax("");
+      setNewBenchMax("");
+      setNewDeadliftMax("");
+    } catch (error) {
+      console.error("Error updating max lifts:", error);
+      Alert.alert(
+        "Error",
+        "Failed to update your max lifts. Please try again."
+      );
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const loadUserData = async () => {
+    try {
+      setIsLoading(true);
+      const user = auth.currentUser;
+      if (user) {
+        // Get user data
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        setUserData(userDoc.data());
+
+        // Get analytics data
+        const analyticsDoc = await getDoc(doc(db, "analytics", user.uid));
+
+        if (analyticsDoc.exists()) {
+          const analyticsData = analyticsDoc.data();
+
+          // Store current maxes data
+          if (analyticsData.currentMaxes) {
+            setCurrentMaxes({
+              squat: analyticsData.currentMaxes.squat || {
+                weight: 0,
+                achievedAt: null,
+              },
+              bench: analyticsData.currentMaxes.bench || {
+                weight: 0,
+                achievedAt: null,
+              },
+              deadlift: analyticsData.currentMaxes.deadlift || {
+                weight: 0,
+                achievedAt: null,
+              },
+            });
+          }
+
+          // Process squat data
+          if (
+            analyticsData.squatProgression &&
+            analyticsData.squatProgression.length > 0
+          ) {
+            const formattedSquatData = processProgressionData(
+              analyticsData.squatProgression
+            );
+            setSquatData(formattedSquatData);
+          } else {
+            setSquatData(createEmptyDataset());
+          }
+
+          // Process bench data
+          if (
+            analyticsData.benchProgression &&
+            analyticsData.benchProgression.length > 0
+          ) {
+            const formattedBenchData = processProgressionData(
+              analyticsData.benchProgression
+            );
+            setBenchData(formattedBenchData);
+          } else {
+            setBenchData(createEmptyDataset());
+          }
+
+          // Process deadlift data
+          if (
+            analyticsData.deadliftProgression &&
+            analyticsData.deadliftProgression.length > 0
+          ) {
+            const formattedDeadliftData = processProgressionData(
+              analyticsData.deadliftProgression
+            );
+            setDeadliftData(formattedDeadliftData);
+          } else {
+            setDeadliftData(createEmptyDataset());
+          }
+
+          // Pre-fill the max lift input fields if available
+          if (analyticsData.currentMaxes) {
+            if (analyticsData.currentMaxes.squat?.weight) {
+              setNewSquatMax(
+                analyticsData.currentMaxes.squat.weight.toString()
+              );
+            }
+            if (analyticsData.currentMaxes.bench?.weight) {
+              setNewBenchMax(
+                analyticsData.currentMaxes.bench.weight.toString()
+              );
+            }
+            if (analyticsData.currentMaxes.deadlift?.weight) {
+              setNewDeadliftMax(
+                analyticsData.currentMaxes.deadlift.weight.toString()
+              );
+            }
+          }
+        } else {
+          // No analytics data, set empty datasets
+          setSquatData(createEmptyDataset());
+          setBenchData(createEmptyDataset());
+          setDeadliftData(createEmptyDataset());
+        }
+      }
+    } catch (error) {
+      console.error("Error loading user data:", error);
+      // Set empty datasets on error
+      setSquatData(createEmptyDataset());
+      setBenchData(createEmptyDataset());
+      setDeadliftData(createEmptyDataset());
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadUserData();
   }, []);
 
@@ -81,89 +314,130 @@ const AthleteStats = () => {
     }
   }, [tooltipData]);
 
-  // Example PR data separated by lift type with exact dates - replace this with real data from your database
-  const benchPressData = {
-    labels: ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"],
-    datasets: [
-      {
-        data: [110, 115, 120, 122, 125, 128, 130, 133, 135, 137, 138, 140].map(
-          lbsToKg
-        ),
-        color: (opacity = 1) => `rgba(255, 182, 193, ${opacity})`, // Pastel pink
-        strokeWidth: 3,
-      },
-    ],
-    // Exact dates for each data point
-    dates: [
-      "2023-01-12",
-      "2023-02-05",
-      "2023-03-18",
-      "2023-04-09",
-      "2023-05-23",
-      "2023-06-14",
-      "2023-07-02",
-      "2023-08-19",
-      "2023-09-11",
-      "2023-10-27",
-      "2023-11-15",
-      "2023-12-08",
-    ],
+  // Process progression data from Firestore into chart format
+  const processProgressionData = (progressionArray) => {
+    // Get current date and week number
+    const currentDate = new Date();
+    const startOfCurrentYear = new Date(currentDate.getFullYear(), 0, 1);
+    const currentDays = Math.floor(
+      (currentDate - startOfCurrentYear) / (24 * 60 * 60 * 1000)
+    );
+    const currentWeekNumber = Math.ceil(
+      (currentDays + startOfCurrentYear.getDay() + 1) / 7
+    );
+
+    // Filter for current year and sort progression by date
+    const currentYear = currentDate.getFullYear().toString();
+    const currentYearData = progressionArray.filter((entry) => {
+      const entryDate =
+        entry.date instanceof Date ? entry.date : entry.date.toDate();
+      return entryDate.getFullYear().toString() === selectedYear;
+    });
+
+    const sortedProgression = [...currentYearData].sort((a, b) => {
+      const dateA = a.date instanceof Date ? a.date : a.date.toDate();
+      const dateB = b.date instanceof Date ? b.date : b.date.toDate();
+      return dateA - dateB;
+    });
+
+    // Create array of all weeks that have passed so far
+    const weekLabels = Array.from(
+      { length: selectedYear === currentYear ? currentWeekNumber : 52 },
+      (_, i) => `${i + 1}`
+    );
+
+    // Maps to store data by week number
+    const weekDataMap = new Map();
+    const weekDatesMap = new Map();
+
+    // Process data by week
+    sortedProgression.forEach((entry) => {
+      const entryDate =
+        entry.date instanceof Date ? entry.date : entry.date.toDate();
+
+      // Calculate week number (1-52)
+      const startOfYear = new Date(entryDate.getFullYear(), 0, 1);
+      const days = Math.floor(
+        (entryDate - startOfYear) / (24 * 60 * 60 * 1000)
+      );
+      const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+
+      // Only include if week number is within our display range
+      if (weekNumber <= weekLabels.length) {
+        // For multiple entries in the same week, keep the latest one
+        weekDataMap.set(weekNumber, entry.weight);
+        weekDatesMap.set(weekNumber, entryDate.toISOString().split("T")[0]);
+      }
+    });
+
+    // Fill in the data array based on our week labels
+    const data = [];
+    const dates = [];
+    const validLabels = [];
+
+    // Only include weeks with data and all weeks up to the most recent data point
+    let lastDataWeek = 0;
+    weekLabels.forEach((label, index) => {
+      const weekNumber = index + 1;
+      if (weekDataMap.has(weekNumber)) {
+        data.push(weekDataMap.get(weekNumber));
+        dates.push(weekDatesMap.get(weekNumber));
+        validLabels.push(label);
+        lastDataWeek = weekNumber;
+      }
+    });
+
+    // If no data points, return an empty chart structure
+    if (data.length === 0) {
+      return createEmptyDataset();
+    }
+
+    return {
+      labels: validLabels,
+      datasets: [
+        {
+          data,
+          strokeWidth: 3,
+        },
+      ],
+      dates,
+    };
   };
 
-  const squatData = {
-    labels: ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"],
-    datasets: [
-      {
-        data: [160, 165, 170, 175, 180, 185, 188, 190, 193, 195, 198, 200].map(
-          lbsToKg
-        ),
-        color: (opacity = 1) => `rgba(173, 216, 230, ${opacity})`, // Pastel blue
-        strokeWidth: 3,
-      },
-    ],
-    // Exact dates for each data point
-    dates: [
-      "2023-01-05",
-      "2023-02-18",
-      "2023-03-12",
-      "2023-04-22",
-      "2023-05-10",
-      "2023-06-28",
-      "2023-07-16",
-      "2023-08-02",
-      "2023-09-19",
-      "2023-10-05",
-      "2023-11-22",
-      "2023-12-14",
-    ],
-  };
+  // Create empty dataset for when no data is available
+  const createEmptyDataset = () => {
+    // Get current week of the year
+    const currentDate = new Date();
+    const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
+    const currentDays = Math.floor(
+      (currentDate - startOfYear) / (24 * 60 * 60 * 1000)
+    );
+    const currentWeekNumber = Math.ceil(
+      (currentDays + startOfYear.getDay() + 1) / 7
+    );
 
-  const deadliftData = {
-    labels: ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"],
-    datasets: [
-      {
-        data: [180, 185, 190, 195, 200, 205, 208, 210, 213, 215, 218, 220].map(
-          lbsToKg
-        ),
-        color: (opacity = 1) => `rgba(144, 238, 144, ${opacity})`, // Pastel green
-        strokeWidth: 3,
-      },
-    ],
-    // Exact dates for each data point
-    dates: [
-      "2023-01-19",
-      "2023-02-10",
-      "2023-03-05",
-      "2023-04-16",
-      "2023-05-31",
-      "2023-06-22",
-      "2023-07-09",
-      "2023-08-26",
-      "2023-09-07",
-      "2023-10-18",
-      "2023-11-29",
-      "2023-12-05",
-    ],
+    // Only show weeks that have passed so far this year
+    const weeksToShow =
+      selectedYear === currentDate.getFullYear().toString()
+        ? currentWeekNumber
+        : 52;
+    const labels = Array.from({ length: weeksToShow }, (_, i) => `W${i + 1}`);
+
+    // If no weeks have passed yet or no labels, show at least W1
+    if (labels.length === 0) {
+      labels.push("W1");
+    }
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: [0],
+          strokeWidth: 3,
+        },
+      ],
+      dates: [new Date().toISOString().split("T")[0]],
+    };
   };
 
   // Format date string to readable format
@@ -198,6 +472,7 @@ const AthleteStats = () => {
     // Get the data for this point and set tooltip immediately (no delay)
     const weight = data.datasets[0].data[dataPointIndex];
     const exactDate = data.dates ? data.dates[dataPointIndex] : null;
+    const label = data.labels ? data.labels[dataPointIndex] : null;
 
     setTooltipData({
       weight,
@@ -205,6 +480,7 @@ const AthleteStats = () => {
       color: data.datasets[0].color(1),
       index: dataPointIndex,
       exactDate,
+      label,
       // Store position for proper placement
       x,
       y,
@@ -233,7 +509,7 @@ const AthleteStats = () => {
           </Text>
         ) : (
           <Text style={styles.tooltipDate}>
-            {monthNames[tooltipData.index]} {selectedYear}
+            Week {tooltipData.label?.substring(1)} / {selectedYear}
           </Text>
         )}
       </Animated.View>
@@ -248,182 +524,287 @@ const AthleteStats = () => {
     </View>
   );
 
-  // Common chart configuration
+  // Function to get y-axis configuration based on the lift data
+  const getYAxisConfig = (liftData) => {
+    // Add null check to prevent errors
+    if (
+      !liftData ||
+      !liftData.datasets ||
+      !liftData.datasets[0] ||
+      !liftData.datasets[0].data
+    ) {
+      return {
+        max: 100,
+        ticks: [0, 50, 100], // Fewer default ticks
+      };
+    }
+
+    // Find maximum value in the data and round up to nearest 10
+    const maxValue = Math.max(...liftData.datasets[0].data);
+    const roundedMax = Math.ceil(maxValue / 10) * 10;
+
+    // Determine appropriate interval based on the max value
+    let interval = 20; // Default to 20kg intervals
+    if (roundedMax > 200) {
+      interval = 50; // Use 50kg intervals for larger values
+    } else if (roundedMax > 100) {
+      interval = 30; // Use 30kg intervals for medium values
+    }
+
+    // Create array of ticks with larger intervals
+    const ticks = [];
+    for (let i = 0; i <= roundedMax; i += interval) {
+      ticks.push(i);
+    }
+
+    return {
+      max: roundedMax,
+      ticks: ticks,
+    };
+  };
+
+  // Common chart configuration with updates
   const chartConfig = {
-    backgroundColor: "#ffffff",
-    backgroundGradientFrom: "#ffffff",
-    backgroundGradientTo: "#f9f9f9",
-    decimalPlaces: 1,
-    color: (opacity = 1) => `rgba(70, 70, 70, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(70, 70, 70, ${opacity})`,
-    strokeWidth: 3,
-    propsForDots: {
-      r: "6",
-      strokeWidth: "2",
-      stroke: "#ffffff",
-    },
+    backgroundColor: "transparent",
+    backgroundGradientFrom: "#fff",
+    backgroundGradientTo: "#fff",
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+    strokeWidth: 1,
+    barPercentage: 0.5,
+    useShadowColorFromDataset: true, // Use dataset color for lines
+    fillShadowGradientOpacity: 0.2, // Lower opacity for area under curve
     propsForBackgroundLines: {
-      strokeDasharray: "", // Solid lines for grid
-      stroke: "rgba(230, 230, 230, 0.9)",
+      strokeDasharray: "5, 5",
+      strokeWidth: 1,
+      stroke: "rgba(0, 0, 0, 0.1)",
     },
+    paddingLeft: 15,
+    paddingRight: 15,
+    paddingTop: 30,
+    paddingBottom: 10,
     propsForLabels: {
-      fontSize: 12,
-      fontWeight: "bold",
+      fontSize: 10,
+      fontWeight: "400",
     },
-    // Y-axis settings
-    withInnerLines: true,
-    withOuterLines: true,
-    withVerticalLines: false,
-    withHorizontalLines: true,
+    // Custom function to format y-axis labels with larger intervals
+    formatYLabel: (value) => {
+      const numValue = Number(value);
+      // Determine display interval based on the maximum value
+      const maxValue = yAxisConfig?.max || 100;
+      let displayInterval = 20; // Default
+
+      if (maxValue > 200) {
+        displayInterval = 50;
+      } else if (maxValue > 100) {
+        displayInterval = 30;
+      }
+
+      // Only show labels at the specified intervals
+      return numValue % displayInterval === 0 ? `${numValue}` : "";
+    },
   };
 
   const chartStyle = {
-    marginVertical: 12,
+    marginVertical: 8,
     borderRadius: 16,
-    paddingRight: 10,
-    paddingLeft: 45, // Increased left padding for y-axis values
-    paddingTop: 20, // Increased top padding to prevent overlap with header
-    paddingBottom: 10, // Added bottom padding
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+    padding: 10,
+    paddingBottom: 30, // Additional padding at the bottom for x-axis labels
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    marginBottom: 25,
   };
 
-  const chartWidth = Dimensions.get("window").width - 85;
-  const chartHeight = 200; // Slightly taller charts for better visibility
+  const renderChart = (data, title, color, dataKey) => {
+    // Add null check before rendering chart
+    if (!data) {
+      return (
+        <View style={styles.singleChartContainer}>
+          <Text style={[styles.liftTitle, { color: color }]}>{title}</Text>
+          <View style={styles.loadingChartContainer}>
+            <ActivityIndicator size="large" color={color} />
+            <Text style={styles.loadingText}>Loading chart data...</Text>
+          </View>
+        </View>
+      );
+    }
 
-  const renderChart = (data, title, color) => {
-    const isSelected = tooltipData && tooltipData.liftType === title;
+    // Get y-axis configuration for this specific lift
+    const yAxisConfig = getYAxisConfig(data);
 
-    // Find min and max values for better Y-axis scaling with nice round numbers
-    const allValues = data.datasets[0].data;
-    const minDataValue = Math.min(...allValues);
-    const maxDataValue = Math.max(...allValues);
-
-    // Round down to nearest 10 for min, round up to nearest 10 for max
-    const minValue = Math.floor(minDataValue / 10) * 10;
-    const maxValue = Math.ceil(maxDataValue / 10) * 10;
-
-    // Use fixed interval of 10kg for consistency
-    const yAxisInterval = 10;
-
-    // Calculate how many steps we need
-    const steps = Math.ceil((maxValue - minValue) / yAxisInterval);
+    // Update the dataset color to match the title color
+    const updatedData = {
+      ...data,
+      datasets: data.datasets.map((dataset) => ({
+        ...dataset,
+        color: (opacity = 1) =>
+          `${color}${Math.round(opacity * 255)
+            .toString(16)
+            .padStart(2, "0")}`,
+        // Add fill gradient color (gray) for area under the line
+        fillShadowGradient: "#CCCCCC",
+      })),
+    };
 
     return (
       <View style={styles.singleChartContainer}>
-        {/* Chart title and badges in a separate container with more spacing */}
-        <View style={styles.titleContainer}>
-          <View style={styles.chartHeaderContainer}>
-            <Text style={[styles.liftTitle, { color }]}>{title}</Text>
-            <View style={[styles.liftBadge, { backgroundColor: color }]}>
-              <Text style={styles.liftBadgeText}>
-                {data.datasets[0].data[data.datasets[0].data.length - 1]} kg
-              </Text>
-            </View>
-          </View>
-
-          {/* Tooltip positioned between title and chart */}
-          {isSelected && tooltipData && (
-            <View style={styles.fixedTooltipWrapper}>
-              <Tooltip tooltipData={tooltipData} color={color} />
-            </View>
+        <Text style={[styles.liftTitle, { color: color }]}>
+          {title}
+          {selectedMax?.type === dataKey && selectedMax?.weight && (
+            <Text style={styles.selectedDateText}>
+              {" "}
+              ({selectedMax.weight}kg)
+            </Text>
           )}
-        </View>
+        </Text>
 
-        {parseInt(selectedYear) >=
-        parseInt(userData?.joinDate || currentYear) ? (
-          <View style={styles.chartContainer}>
-            <LineChart
-              data={data}
-              width={chartWidth}
-              height={chartHeight}
-              chartConfig={{
-                ...chartConfig,
-                propsForDots: (dataPoint, index) => {
-                  // Highlight selected dot
-                  if (
-                    isSelected &&
-                    tooltipData &&
-                    tooltipData.index === index
-                  ) {
-                    return {
-                      r: "9",
-                      strokeWidth: "3",
-                      stroke: "white",
-                      fill: color,
-                    };
-                  }
-                  // Regular dots
-                  return {
-                    r: "5",
-                    strokeWidth: "2",
-                    stroke: "white",
-                    fill: color,
-                  };
-                },
-              }}
-              bezier
-              style={chartStyle}
-              fromZero={false}
-              formatYLabel={(value) => `${value}`} // Clean numerical display
-              segments={steps}
-              yAxisSuffix=" kg"
-              yAxisInterval={yAxisInterval}
-              onDataPointClick={({ value, dataset, getColor, index, x, y }) => {
-                // Only process legitimate dot clicks
-                if (x && y) {
-                  handleDotPress(data, index, title, x, y);
-                }
-              }}
-              withDots={true}
-              withShadow={true}
-              transparent={true}
-              withVerticalLabels={true}
-              withHorizontalLabels={true}
-              withVerticalLines={false}
-              withHorizontalLines={true}
-              yAxisLabel=""
-              showBarTops={false}
-              // Set min and max values for better Y-axis scaling
-              fromValue={minValue}
-              toValue={maxValue}
-            />
-
-            {/* Y-axis custom numeric values with consistent intervals */}
-            <View style={styles.yAxisValueContainer}>
-              {Array.from({ length: steps + 1 }).map((_, i) => {
-                const value = minValue + i * yAxisInterval;
-                const yPosition =
-                  chartHeight -
-                  ((value - minValue) / (maxValue - minValue)) * chartHeight;
-                return (
-                  <Text
-                    key={i}
-                    style={[
-                      styles.yAxisValue,
-                      { top: yPosition - 6 }, // Adjust for text height
-                    ]}
-                  >
-                    {value}
-                  </Text>
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          <NotMemberMessage />
-        )}
+        <LineChart
+          data={updatedData}
+          width={chartWidth}
+          height={CHART_HEIGHT}
+          chartConfig={{
+            ...chartConfig,
+            // Set colors for dots and lines to match title
+            propsForDots: {
+              r: "5",
+              strokeWidth: "2",
+              stroke: color,
+              fill: color,
+            },
+            // Adjust label styling to fit more labels
+            propsForLabels: {
+              fontSize: 8, // Smaller font size for x-axis labels
+              fontWeight: "400",
+              textAnchor: "middle", // Center align the text
+              rotation: -45, // Angle the text to fit more labels
+            },
+          }}
+          bezier
+          style={[chartStyle, { backgroundColor: "#fff" }]}
+          fromZero={true}
+          withInnerLines={true}
+          withOuterLines={true}
+          withVerticalLines={true}
+          withHorizontalLines={true}
+          withDots={true}
+          withShadow={false}
+          segments={yAxisConfig.ticks.length - 1}
+          yAxisMax={yAxisConfig.max}
+          // Rotate labels slightly to fit more of them
+          horizontalLabelRotation={45}
+          verticalLabelRotation={0}
+          yAxisSuffix="kg"
+          // Show every week label with W prefix
+          formatXLabel={(value) => `W${value}`}
+          xLabelsOffset={10}
+          withXAxisLabel={true}
+          // Add extra bottom padding to make room for the angled labels
+          chartConfig={{
+            ...chartConfig,
+            paddingBottom: 25,
+          }}
+          decorator={() => {
+            return selectedMax?.type === dataKey && selectedMax?.weight ? (
+              <View style={styles.selectedDot} />
+            ) : null;
+          }}
+        />
       </View>
     );
+  };
+
+  // Show max date modal when a max lift is clicked
+  const handleMaxLiftClick = (liftType) => {
+    setSelectedMax({
+      type: liftType,
+      weight: currentMaxes[liftType].weight,
+      achievedAt: currentMaxes[liftType].achievedAt,
+    });
+    setShowMaxDateModal(true);
+  };
+
+  // Format timestamp for display
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "N/A";
+
+    const date =
+      timestamp instanceof Date
+        ? timestamp
+        : timestamp.toDate
+        ? timestamp.toDate()
+        : new Date(timestamp);
+
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>My Analytics</Text>
+
+      {/* Current Max Lifts Display */}
+      <View style={styles.maxLiftsContainer}>
+        <TouchableOpacity
+          style={[styles.maxLiftCard, { borderColor: colors.squat }]}
+          onPress={() => handleMaxLiftClick("squat")}
+        >
+          <Text style={styles.maxLiftLabel}>Squat</Text>
+          <Text style={styles.maxLiftValue}>
+            {currentMaxes.squat.weight} kg
+          </Text>
+          <Icon
+            name="calendar-outline"
+            size={12}
+            color="#666"
+            style={styles.calendarIcon}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.maxLiftCard, { borderColor: colors.benchPress }]}
+          onPress={() => handleMaxLiftClick("bench")}
+        >
+          <Text style={styles.maxLiftLabel}>Bench</Text>
+          <Text style={styles.maxLiftValue}>
+            {currentMaxes.bench.weight} kg
+          </Text>
+          <Icon
+            name="calendar-outline"
+            size={12}
+            color="#666"
+            style={styles.calendarIcon}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.maxLiftCard, { borderColor: colors.deadlift }]}
+          onPress={() => handleMaxLiftClick("deadlift")}
+        >
+          <Text style={styles.maxLiftLabel}>Deadlift</Text>
+          <Text style={styles.maxLiftValue}>
+            {currentMaxes.deadlift.weight} kg
+          </Text>
+          <Icon
+            name="calendar-outline"
+            size={12}
+            color="#666"
+            style={styles.calendarIcon}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Update Max Button */}
+      <TouchableOpacity
+        style={styles.updateButton}
+        onPress={() => setShowUpdateModal(true)}
+      >
+        <Text style={styles.updateButtonText}>Update Max Lifts</Text>
+      </TouchableOpacity>
 
       <ScrollView
         style={styles.scrollContainer}
@@ -451,9 +832,30 @@ const AthleteStats = () => {
           </TouchableOpacity>
         </View>
 
-        {renderChart(benchPressData, "Bench Press", colors.benchPress)}
-        {renderChart(squatData, "Squat", colors.squat)}
-        {renderChart(deadliftData, "Deadlift", colors.deadlift)}
+        {/* Ensure data exists before rendering charts */}
+        {squatData ? (
+          renderChart(squatData, "Squat", colors.squat, "squat")
+        ) : (
+          <View style={styles.loadingChartContainer}>
+            <ActivityIndicator size="large" color={colors.squat} />
+          </View>
+        )}
+
+        {benchData ? (
+          renderChart(benchData, "Bench Press", colors.benchPress, "bench")
+        ) : (
+          <View style={styles.loadingChartContainer}>
+            <ActivityIndicator size="large" color={colors.benchPress} />
+          </View>
+        )}
+
+        {deadliftData ? (
+          renderChart(deadliftData, "Deadlift", colors.deadlift, "deadlift")
+        ) : (
+          <View style={styles.loadingChartContainer}>
+            <ActivityIndicator size="large" color={colors.deadlift} />
+          </View>
+        )}
 
         {/* Touch area to clear tooltip when tapping elsewhere */}
         <TouchableOpacity
@@ -463,6 +865,42 @@ const AthleteStats = () => {
         />
       </ScrollView>
 
+      {/* Max Date Modal */}
+      <Modal
+        visible={showMaxDateModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMaxDateModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMaxDateModal(false)}
+        >
+          <View style={styles.maxDateContainer}>
+            <Text style={styles.maxDateTitle}>
+              {selectedMax?.type?.charAt(0).toUpperCase() +
+                selectedMax?.type?.slice(1)}{" "}
+              Max
+            </Text>
+            <Text style={styles.maxDateWeight}>{selectedMax?.weight} kg</Text>
+            <Text style={styles.maxDateLabel}>Achieved on:</Text>
+            <Text style={styles.maxDateValue}>
+              {selectedMax?.achievedAt
+                ? formatTimestamp(selectedMax.achievedAt)
+                : "N/A"}
+            </Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowMaxDateModal(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Year Dropdown Modal */}
       <Modal
         visible={showYearDropdown}
         transparent={true}
@@ -499,6 +937,81 @@ const AthleteStats = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Update Max Lifts Modal */}
+      <Modal
+        visible={showUpdateModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowUpdateModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.updateModalContainer}>
+            <Text style={styles.updateModalTitle}>Update Max Lifts</Text>
+            <Text style={styles.updateModalSubtitle}>
+              Enter values only for the lifts you want to update
+            </Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Squat (kg)</Text>
+              <TextInput
+                style={styles.input}
+                value={newSquatMax}
+                onChangeText={setNewSquatMax}
+                keyboardType="numeric"
+                placeholder="Enter your squat max"
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Bench Press (kg)</Text>
+              <TextInput
+                style={styles.input}
+                value={newBenchMax}
+                onChangeText={setNewBenchMax}
+                keyboardType="numeric"
+                placeholder="Enter your bench max"
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Deadlift (kg)</Text>
+              <TextInput
+                style={styles.input}
+                value={newDeadliftMax}
+                onChangeText={setNewDeadliftMax}
+                keyboardType="numeric"
+                placeholder="Enter your deadlift max"
+              />
+            </View>
+
+            <View style={styles.modalButtonsContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowUpdateModal(false)}
+                disabled={isUpdating}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleUpdateMaxes}
+                disabled={isUpdating}
+              >
+                {isUpdating ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -519,12 +1032,35 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 30,
     fontWeight: "bold",
-    marginBottom: 30,
+    marginBottom: 10,
+  },
+  updateButton: {
+    backgroundColor: "#000",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  updateButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
   },
   singleChartContainer: {
-    marginBottom: 45, // Increased bottom margin for more space between charts
+    marginBottom: 30,
     width: "100%",
-    position: "relative",
+    // Increase padding to ensure content stays within bounds
+    paddingHorizontal: 5,
+    paddingTop: 10, // Add top padding
+    paddingBottom: 15, // Add bottom padding
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   titleContainer: {
     marginBottom: 25, // Increased space between title and chart
@@ -534,6 +1070,26 @@ const styles = StyleSheet.create({
   chartContainer: {
     position: "relative",
     marginTop: 5, // Reduced margin to prevent gap
+  },
+  loadingContainer: {
+    height: CHART_HEIGHT,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#666",
+  },
+  noDataContainer: {
+    height: CHART_HEIGHT,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f9f9f9",
+    borderRadius: 16,
+  },
+  noDataText: {
+    color: "#666",
+    fontSize: 14,
   },
   tooltipWrapper: {
     position: "absolute",
@@ -558,14 +1114,27 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     position: "relative",
   },
-  tooltipArrow: {
+  yAxisValueContainer: {
     position: "absolute",
-    width: 10,
-    height: 10,
-    bottom: -5,
-    left: "50%",
-    marginLeft: -5,
-    transform: [{ rotate: "45deg" }],
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 75, // Increased width to match new left padding
+    paddingRight: 15, // Increased right padding to move values away from the chart
+    paddingTop: 20, // Match chart padding
+    paddingBottom: 10, // Match chart padding
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    backgroundColor: "transparent", // Changed to transparent
+    zIndex: 10,
+  },
+  yAxisValue: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: "#555",
+    textAlign: "right",
+    position: "absolute",
+    right: 15, // Increased right position to move values further from the chart
   },
   chartHeaderContainer: {
     flexDirection: "row",
@@ -658,6 +1227,76 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
+  updateModalContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    width: "85%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  updateModalTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  updateModalSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 6,
+    color: "#333",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  modalButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 24,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#f2f2f2",
+    marginRight: 8,
+  },
+  saveButton: {
+    backgroundColor: "#000",
+    marginLeft: 8,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: "#666",
+    fontWeight: "600",
+  },
+  saveButtonText: {
+    fontSize: 16,
+    color: "#fff",
+    fontWeight: "600",
+  },
   yearOption: {
     padding: 15,
     borderBottomWidth: 1,
@@ -685,27 +1324,108 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
-  yAxisValueContainer: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 45, // Increased width for y-axis values
-    paddingRight: 8,
-    paddingTop: 20, // Match chart padding
-    paddingBottom: 10, // Match chart padding
+  maxLiftsContainer: {
+    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
-    backgroundColor: "transparent", // Changed to transparent
-    zIndex: 10,
+    marginBottom: 20,
+    paddingHorizontal: 5,
   },
-  yAxisValue: {
-    fontSize: 10,
+  maxLiftCard: {
+    width: "31%",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    borderLeftWidth: 3,
+    alignItems: "center",
+  },
+  maxLiftLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 5,
+    color: "#333",
+  },
+  maxLiftValue: {
+    fontSize: 18,
     fontWeight: "bold",
-    color: "#555",
-    textAlign: "right",
+    marginBottom: 5,
+  },
+  calendarIcon: {
+    marginTop: 2,
+  },
+  maxDateContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    width: "70%",
+    maxWidth: 300,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  maxDateTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#333",
+  },
+  maxDateWeight: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 15,
+  },
+  maxDateLabel: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 5,
+  },
+  maxDateValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 20,
+    color: "#333",
+  },
+  closeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: "#f2f2f2",
+    borderRadius: 8,
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+  },
+  selectedDot: {
     position: "absolute",
-    right: 8,
+    top: 10,
+    right: 10,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "white",
+    borderWidth: 2,
+    borderColor: "black",
+  },
+  selectedDateText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#666",
+  },
+  loadingChartContainer: {
+    height: 200,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    marginBottom: 30,
   },
 });
 
