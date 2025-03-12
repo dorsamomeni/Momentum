@@ -7,7 +7,7 @@ const profileColors = [
   "#FFAAA5", // Salmon
   "#FFB7B2", // Light Pink
   "#B4F8C8", // Soft Green
-  
+
   // Additional Colors
   "#B5EAD7", // Sage
   "#C7CEEA", // Periwinkle

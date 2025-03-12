@@ -129,13 +129,6 @@ const AthleteSettings = () => {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.backButtonText}>←</Text>
-      </TouchableOpacity>
-
       <Text style={styles.title}>Settings</Text>
 
       <ScrollView
@@ -243,23 +236,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    paddingTop: 60,
-  },
-  backButton: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    zIndex: 10,
-  },
-  backButtonText: {
-    fontSize: 28,
-    color: "#000",
+    paddingTop: 100,
   },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "bold",
     marginLeft: 20,
-    marginTop: 60,
     marginBottom: 20,
   },
   section: {

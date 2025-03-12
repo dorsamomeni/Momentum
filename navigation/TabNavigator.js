@@ -22,6 +22,7 @@ import SendProgram from "../pages/SendProgram";
 import Templates from "../pages/Templates";
 import EditTemplate from "../pages/EditTemplate";
 import EditTemplateExercise from "../pages/EditTemplateExercise";
+import ClientsStats from "../pages/ClientsStats";
 
 import { auth, db } from "../src/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -136,7 +137,7 @@ const TabNavigator = () => {
       />
       <Tab.Screen
         name="Stats"
-        component={ClientStats}
+        component={ClientsStats}
         options={{
           tabBarButton: (props) => (
             <CustomTabBarButton {...props}>

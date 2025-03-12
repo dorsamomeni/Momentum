@@ -13,6 +13,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
+  TouchableWithoutFeedback,
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { LineChart } from "react-native-chart-kit";
@@ -24,6 +26,7 @@ import {
   arrayUnion,
   serverTimestamp,
 } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Define chart dimensions outside component so they're accessible to styles
 const chartWidth = Dimensions.get("window").width - 85;
@@ -35,11 +38,21 @@ const AthleteStats = () => {
   const [tooltipData, setTooltipData] = useState(null);
   const fadeAnim = useState(new Animated.Value(0))[0];
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // State for progression data
   const [squatData, setSquatData] = useState(null);
   const [benchData, setBenchData] = useState(null);
   const [deadliftData, setDeadliftData] = useState(null);
+  const [currentMaxes, setCurrentMaxes] = useState({
+    squat: { weight: 0, achievedAt: null },
+    bench: { weight: 0, achievedAt: null },
+    deadlift: { weight: 0, achievedAt: null },
+  });
+
+  // Add state for demo data
+  const [isDemoData, setIsDemoData] = useState(false);
+  const [demoProgressionData, setDemoProgressionData] = useState(null);
 
   // State for update modal
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -48,13 +61,6 @@ const AthleteStats = () => {
   const [newDeadliftMax, setNewDeadliftMax] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // State for current maxes and dates
-  const [currentMaxes, setCurrentMaxes] = useState({
-    squat: { weight: 0, achievedAt: null },
-    bench: { weight: 0, achievedAt: null },
-    deadlift: { weight: 0, achievedAt: null },
-  });
-
   // State for showing max date modal
   const [showMaxDateModal, setShowMaxDateModal] = useState(false);
   const [selectedMax, setSelectedMax] = useState(null);
@@ -62,6 +68,7 @@ const AthleteStats = () => {
   // Get current year and create array of last 5 years
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => String(currentYear - i));
+  const availableYears = years; // Define availableYears as the same as years
   const [selectedYear, setSelectedYear] = useState(String(currentYear));
 
   // Full month names for tooltips
@@ -190,7 +197,7 @@ const AthleteStats = () => {
     }
   };
 
-  const loadUserData = async () => {
+  const loadUserData = async (yearToLoad = selectedYear) => {
     try {
       setIsLoading(true);
       const user = auth.currentUser;
@@ -205,8 +212,42 @@ const AthleteStats = () => {
         if (analyticsDoc.exists()) {
           const analyticsData = analyticsDoc.data();
 
-          // Store current maxes data
-          if (analyticsData.currentMaxes) {
+          // Store the original progression data for year changes
+          if (!isDemoData) {
+            setDemoProgressionData({
+              squatProgression: analyticsData.squatProgression || [],
+              benchProgression: analyticsData.benchProgression || [],
+              deadliftProgression: analyticsData.deadliftProgression || [],
+            });
+          }
+
+          // Calculate year maxes for the selected year
+          if (
+            analyticsData.squatProgression ||
+            analyticsData.benchProgression ||
+            analyticsData.deadliftProgression
+          ) {
+            const yearMaxes = calculateYearMaxes(
+              analyticsData.squatProgression || [],
+              analyticsData.benchProgression || [],
+              analyticsData.deadliftProgression || [],
+              yearToLoad
+            );
+
+            setCurrentMaxes(yearMaxes);
+
+            // Update input fields with current maxes
+            if (yearMaxes.squat.weight) {
+              setNewSquatMax(yearMaxes.squat.weight.toString());
+            }
+            if (yearMaxes.bench.weight) {
+              setNewBenchMax(yearMaxes.bench.weight.toString());
+            }
+            if (yearMaxes.deadlift.weight) {
+              setNewDeadliftMax(yearMaxes.deadlift.weight.toString());
+            }
+          } else if (analyticsData.currentMaxes) {
+            // If no progression data but we have current maxes, use those
             setCurrentMaxes({
               squat: analyticsData.currentMaxes.squat || {
                 weight: 0,
@@ -221,49 +262,8 @@ const AthleteStats = () => {
                 achievedAt: null,
               },
             });
-          }
 
-          // Process squat data
-          if (
-            analyticsData.squatProgression &&
-            analyticsData.squatProgression.length > 0
-          ) {
-            const formattedSquatData = processProgressionData(
-              analyticsData.squatProgression
-            );
-            setSquatData(formattedSquatData);
-          } else {
-            setSquatData(createEmptyDataset());
-          }
-
-          // Process bench data
-          if (
-            analyticsData.benchProgression &&
-            analyticsData.benchProgression.length > 0
-          ) {
-            const formattedBenchData = processProgressionData(
-              analyticsData.benchProgression
-            );
-            setBenchData(formattedBenchData);
-          } else {
-            setBenchData(createEmptyDataset());
-          }
-
-          // Process deadlift data
-          if (
-            analyticsData.deadliftProgression &&
-            analyticsData.deadliftProgression.length > 0
-          ) {
-            const formattedDeadliftData = processProgressionData(
-              analyticsData.deadliftProgression
-            );
-            setDeadliftData(formattedDeadliftData);
-          } else {
-            setDeadliftData(createEmptyDataset());
-          }
-
-          // Pre-fill the max lift input fields if available
-          if (analyticsData.currentMaxes) {
+            // Update input fields with current maxes
             if (analyticsData.currentMaxes.squat?.weight) {
               setNewSquatMax(
                 analyticsData.currentMaxes.squat.weight.toString()
@@ -280,11 +280,60 @@ const AthleteStats = () => {
               );
             }
           }
+
+          // Process squat data
+          if (
+            analyticsData.squatProgression &&
+            analyticsData.squatProgression.length > 0
+          ) {
+            const formattedSquatData = processProgressionData(
+              analyticsData.squatProgression,
+              yearToLoad
+            );
+            setSquatData(formattedSquatData);
+          } else {
+            setSquatData(createEmptyDataset());
+          }
+
+          // Process bench data
+          if (
+            analyticsData.benchProgression &&
+            analyticsData.benchProgression.length > 0
+          ) {
+            const formattedBenchData = processProgressionData(
+              analyticsData.benchProgression,
+              yearToLoad
+            );
+            setBenchData(formattedBenchData);
+          } else {
+            setBenchData(createEmptyDataset());
+          }
+
+          // Process deadlift data
+          if (
+            analyticsData.deadliftProgression &&
+            analyticsData.deadliftProgression.length > 0
+          ) {
+            const formattedDeadliftData = processProgressionData(
+              analyticsData.deadliftProgression,
+              yearToLoad
+            );
+            setDeadliftData(formattedDeadliftData);
+          } else {
+            setDeadliftData(createEmptyDataset());
+          }
         } else {
           // No analytics data, set empty datasets
           setSquatData(createEmptyDataset());
           setBenchData(createEmptyDataset());
           setDeadliftData(createEmptyDataset());
+
+          // Set empty maxes
+          setCurrentMaxes({
+            squat: { weight: 0, achievedAt: null },
+            bench: { weight: 0, achievedAt: null },
+            deadlift: { weight: 0, achievedAt: null },
+          });
         }
       }
     } catch (error) {
@@ -293,14 +342,144 @@ const AthleteStats = () => {
       setSquatData(createEmptyDataset());
       setBenchData(createEmptyDataset());
       setDeadliftData(createEmptyDataset());
+
+      // Set empty maxes
+      setCurrentMaxes({
+        squat: { weight: 0, achievedAt: null },
+        bench: { weight: 0, achievedAt: null },
+        deadlift: { weight: 0, achievedAt: null },
+      });
     } finally {
       setIsLoading(false);
+      setIsDemoData(false); // Ensure we're not in demo mode when loading real data
+      saveDemoDataState(false); // Save the real data state to AsyncStorage
     }
   };
 
+  // Save selected year to AsyncStorage
+  const saveSelectedYear = async (year) => {
+    try {
+      await AsyncStorage.setItem("selectedYear", year);
+      console.log(`[DEBUG] Saved selected year to storage: ${year}`);
+    } catch (error) {
+      console.error("Error saving selected year:", error);
+    }
+  };
+
+  // Load selected year from AsyncStorage
+  const loadSelectedYear = async () => {
+    try {
+      const savedYear = await AsyncStorage.getItem("selectedYear");
+      if (savedYear) {
+        console.log(`[DEBUG] Loaded selected year from storage: ${savedYear}`);
+        setSelectedYear(savedYear);
+        return savedYear;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error loading selected year:", error);
+      return null;
+    }
+  };
+
+  // Save demo data state to AsyncStorage
+  const saveDemoDataState = async (isDemoMode) => {
+    try {
+      await AsyncStorage.setItem("isDemoData", isDemoMode.toString());
+      console.log(`[DEBUG] Saved demo data state: ${isDemoMode}`);
+    } catch (error) {
+      console.error("Error saving demo data state:", error);
+    }
+  };
+
+  // Load demo data state from AsyncStorage
+  const loadDemoDataState = async () => {
+    try {
+      const savedState = await AsyncStorage.getItem("isDemoData");
+      if (savedState) {
+        const isDemoMode = savedState === "true";
+        console.log(`[DEBUG] Loaded demo data state: ${isDemoMode}`);
+        setIsDemoData(isDemoMode);
+        return isDemoMode;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error loading demo data state:", error);
+      return false;
+    }
+  };
+
+  // Load user data with the saved year on initial mount
   useEffect(() => {
-    loadUserData();
+    const initializeData = async () => {
+      setIsLoading(true);
+      const savedYear = await loadSelectedYear();
+      const isDemoMode = await loadDemoDataState();
+
+      if (isDemoMode) {
+        // If we were in demo mode, regenerate the demo data
+        generateDemoData(false); // Pass false to avoid saving state again
+      } else {
+        await loadUserData(savedYear || selectedYear);
+      }
+    };
+
+    initializeData();
   }, []);
+
+  // Add a useEffect to reload data when the selected year changes
+  useEffect(() => {
+    console.log(`[DEBUG] Year changed in useEffect: ${selectedYear}`);
+    // Only reload if we're not in the initial loading state
+    if (!isLoading) {
+      // Save the selected year to AsyncStorage
+      saveSelectedYear(selectedYear);
+
+      if (isDemoData && demoProgressionData) {
+        // For demo data, recalculate with the new year
+        const yearMaxes = calculateYearMaxes(
+          demoProgressionData.squatProgression,
+          demoProgressionData.benchProgression,
+          demoProgressionData.deadliftProgression,
+          selectedYear
+        );
+
+        // Process data for charts
+        const processedSquatData = processProgressionData(
+          demoProgressionData.squatProgression,
+          selectedYear
+        );
+        const processedBenchData = processProgressionData(
+          demoProgressionData.benchProgression,
+          selectedYear
+        );
+        const processedDeadliftData = processProgressionData(
+          demoProgressionData.deadliftProgression,
+          selectedYear
+        );
+
+        // Update chart data
+        setSquatData(processedSquatData);
+        setBenchData(processedBenchData);
+        setDeadliftData(processedDeadliftData);
+        setCurrentMaxes(yearMaxes);
+
+        // Update input fields with current maxes
+        if (yearMaxes.squat.weight) {
+          setNewSquatMax(yearMaxes.squat.weight.toString());
+        }
+        if (yearMaxes.bench.weight) {
+          setNewBenchMax(yearMaxes.bench.weight.toString());
+        }
+        if (yearMaxes.deadlift.weight) {
+          setNewDeadliftMax(yearMaxes.deadlift.weight.toString());
+        }
+      } else {
+        // For real data, reload from Firebase with the selected year
+        loadUserData(selectedYear);
+      }
+    }
+  }, [selectedYear]);
 
   useEffect(() => {
     if (tooltipData) {
@@ -315,128 +494,114 @@ const AthleteStats = () => {
   }, [tooltipData]);
 
   // Process progression data from Firestore into chart format
-  const processProgressionData = (progressionArray) => {
-    // Get current date and week number
-    const currentDate = new Date();
-    const startOfCurrentYear = new Date(currentDate.getFullYear(), 0, 1);
-    const currentDays = Math.floor(
-      (currentDate - startOfCurrentYear) / (24 * 60 * 60 * 1000)
-    );
-    const currentWeekNumber = Math.ceil(
-      (currentDays + startOfCurrentYear.getDay() + 1) / 7
-    );
+  const processProgressionData = (progressionArray, explicitYear = null) => {
+    if (!progressionArray || progressionArray.length === 0) {
+      return createEmptyDataset();
+    }
 
-    // Filter for current year and sort progression by date
-    const currentYear = currentDate.getFullYear().toString();
-    const currentYearData = progressionArray.filter((entry) => {
+    // Use explicitly provided year or fall back to selectedYear state
+    const yearToUse = explicitYear || selectedYear;
+    console.log(`[DEBUG] Processing data for year: ${yearToUse}`);
+
+    // Filter for selected year and sort progression by date
+    const yearData = progressionArray.filter((entry) => {
       const entryDate =
         entry.date instanceof Date ? entry.date : entry.date.toDate();
-      return entryDate.getFullYear().toString() === selectedYear;
+      return entryDate.getFullYear().toString() === yearToUse;
     });
 
-    const sortedProgression = [...currentYearData].sort((a, b) => {
+    console.log(
+      `[DEBUG] Found ${yearData.length} entries for year ${yearToUse}`
+    );
+
+    if (yearData.length === 0) {
+      return createEmptyDataset();
+    }
+
+    // Sort by date (oldest to newest)
+    const sortedProgression = [...yearData].sort((a, b) => {
       const dateA = a.date instanceof Date ? a.date : a.date.toDate();
       const dateB = b.date instanceof Date ? b.date : b.date.toDate();
       return dateA - dateB;
     });
 
-    // Create array of all weeks that have passed so far
-    const weekLabels = Array.from(
-      { length: selectedYear === currentYear ? currentWeekNumber : 52 },
-      (_, i) => `${i + 1}`
-    );
+    // Process monthly data
+    return processMonthlyData(sortedProgression);
+  };
 
-    // Maps to store data by week number
-    const weekDataMap = new Map();
-    const weekDatesMap = new Map();
+  // Process monthly data for charts
+  const processMonthlyData = (sortedProgression, maxWeight = null) => {
+    // Create arrays for chart data
+    const monthLabels = [];
+    const weightData = [];
+    const dateStrings = [];
+    const isPRMonth = [];
 
-    // Process data by week
+    // Initialize arrays with all 12 months
+    for (let i = 0; i < 12; i++) {
+      monthLabels.push(monthNames[i].substring(0, 3)); // Use first 3 letters of month name
+      weightData.push(null); // Initialize with null (no data point)
+      dateStrings.push(""); // Empty date string
+      isPRMonth.push(false); // Not a PR month by default
+    }
+
+    // Process each entry
     sortedProgression.forEach((entry) => {
       const entryDate =
         entry.date instanceof Date ? entry.date : entry.date.toDate();
+      const month = entryDate.getMonth();
 
-      // Calculate week number (1-52)
-      const startOfYear = new Date(entryDate.getFullYear(), 0, 1);
-      const days = Math.floor(
-        (entryDate - startOfYear) / (24 * 60 * 60 * 1000)
-      );
-      const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
-
-      // Only include if week number is within our display range
-      if (weekNumber <= weekLabels.length) {
-        // For multiple entries in the same week, keep the latest one
-        weekDataMap.set(weekNumber, entry.weight);
-        weekDatesMap.set(weekNumber, entryDate.toISOString().split("T")[0]);
+      // Update the data for this month if the weight is higher than what's already there
+      // or if there's no data yet
+      if (weightData[month] === null || entry.weight > weightData[month]) {
+        weightData[month] = entry.weight;
+        dateStrings[month] = entryDate.toISOString().split("T")[0];
+        isPRMonth[month] = true; // This is a PR month
       }
     });
 
-    // Fill in the data array based on our week labels
-    const data = [];
-    const dates = [];
-    const validLabels = [];
-
-    // Only include weeks with data and all weeks up to the most recent data point
-    let lastDataWeek = 0;
-    weekLabels.forEach((label, index) => {
-      const weekNumber = index + 1;
-      if (weekDataMap.has(weekNumber)) {
-        data.push(weekDataMap.get(weekNumber));
-        dates.push(weekDatesMap.get(weekNumber));
-        validLabels.push(label);
-        lastDataWeek = weekNumber;
-      }
-    });
-
-    // If no data points, return an empty chart structure
-    if (data.length === 0) {
-      return createEmptyDataset();
-    }
+    // If maxWeight is provided, use it to scale the chart
+    const validWeights = weightData.filter((w) => w !== null);
+    const maxDataWeight =
+      maxWeight || (validWeights.length > 0 ? Math.max(...validWeights) : 1);
 
     return {
-      labels: validLabels,
+      labels: monthLabels,
       datasets: [
         {
-          data,
+          data: weightData,
           strokeWidth: 3,
         },
       ],
-      dates,
+      dates: dateStrings,
+      isPRMonth: isPRMonth,
+      scale: "monthly",
+      maxValue: maxDataWeight,
     };
   };
 
   // Create empty dataset for when no data is available
   const createEmptyDataset = () => {
-    // Get current week of the year
-    const currentDate = new Date();
-    const startOfYear = new Date(currentDate.getFullYear(), 0, 1);
-    const currentDays = Math.floor(
-      (currentDate - startOfYear) / (24 * 60 * 60 * 1000)
-    );
-    const currentWeekNumber = Math.ceil(
-      (currentDays + startOfYear.getDay() + 1) / 7
-    );
-
-    // Only show weeks that have passed so far this year
-    const weeksToShow =
-      selectedYear === currentDate.getFullYear().toString()
-        ? currentWeekNumber
-        : 52;
-    const labels = Array.from({ length: weeksToShow }, (_, i) => `W${i + 1}`);
-
-    // If no weeks have passed yet or no labels, show at least W1
-    if (labels.length === 0) {
-      labels.push("W1");
-    }
+    // Create arrays with all 12 months
+    const monthLabels = monthNames.map((month) => month.substring(0, 3));
+    const emptyData = Array(12).fill(null);
+    const emptyDates = Array(12).fill("");
+    const emptyPRFlags = Array(12).fill(false);
+    const noActualData = Array(12).fill(false);
 
     return {
-      labels,
+      labels: monthLabels,
       datasets: [
         {
-          data: [0],
+          data: emptyData,
           strokeWidth: 3,
         },
       ],
-      dates: [new Date().toISOString().split("T")[0]],
+      dates: emptyDates,
+      isPRMonth: emptyPRFlags,
+      scale: "monthly",
+      isEmpty: true, // Add a flag to explicitly mark this as an empty dataset
+      hasActualData: noActualData,
     };
   };
 
@@ -450,41 +615,40 @@ const AthleteStats = () => {
     });
   };
 
+  // Update year selection to handle demo data
   const handleYearSelect = (year) => {
+    console.log(`[DEBUG] Year selected: ${year}`);
     setSelectedYear(year);
     setShowYearDropdown(false);
-    setTooltipData(null); // Clear tooltip when year changes
-    // In a real app, you would fetch data for the selected year here
+    // Save the selected year to AsyncStorage
+    saveSelectedYear(year);
+    // The useEffect hook will handle loading the data for the selected year
   };
 
-  // Handler for dot press - only called when a dot is actually clicked
+  // Handle dot press to show max lift details
   const handleDotPress = (data, dataPointIndex, liftType, x, y) => {
-    // If we're already showing this tooltip, hide it (toggle behavior)
     if (
-      tooltipData &&
-      tooltipData.liftType === liftType &&
-      tooltipData.index === dataPointIndex
+      !data ||
+      !data.datasets ||
+      !data.datasets[0] ||
+      !data.datasets[0].data
     ) {
-      setTooltipData(null);
       return;
     }
 
-    // Get the data for this point and set tooltip immediately (no delay)
     const weight = data.datasets[0].data[dataPointIndex];
-    const exactDate = data.dates ? data.dates[dataPointIndex] : null;
-    const label = data.labels ? data.labels[dataPointIndex] : null;
+    const date = data.dates[dataPointIndex];
+    const month = data.labels[dataPointIndex];
 
-    setTooltipData({
-      weight,
-      liftType,
-      color: data.datasets[0].color(1),
-      index: dataPointIndex,
-      exactDate,
-      label,
-      // Store position for proper placement
-      x,
-      y,
+    // Set selected max for modal display
+    setSelectedMax({
+      type: liftType,
+      weight: weight,
+      achievedAt: new Date(date),
     });
+
+    // Show the modal
+    setShowMaxDateModal(true);
   };
 
   // Custom tooltip component
@@ -526,7 +690,6 @@ const AthleteStats = () => {
 
   // Function to get y-axis configuration based on the lift data
   const getYAxisConfig = (liftData) => {
-    // Add null check to prevent errors
     if (
       !liftData ||
       !liftData.datasets ||
@@ -534,31 +697,32 @@ const AthleteStats = () => {
       !liftData.datasets[0].data
     ) {
       return {
-        max: 100,
-        ticks: [0, 50, 100], // Fewer default ticks
+        max: 250,
+        min: 0,
+        ticks: [0, 50, 100, 150, 200, 250],
       };
     }
 
-    // Find maximum value in the data and round up to nearest 10
-    const maxValue = Math.max(...liftData.datasets[0].data);
-    const roundedMax = Math.ceil(maxValue / 10) * 10;
+    const data = liftData.datasets[0].data;
+    const maxValue = Math.max(...data);
+    const minValue = Math.min(...data.filter((val) => val > 0));
 
-    // Determine appropriate interval based on the max value
-    let interval = 20; // Default to 20kg intervals
-    if (roundedMax > 200) {
-      interval = 50; // Use 50kg intervals for larger values
-    } else if (roundedMax > 100) {
-      interval = 30; // Use 30kg intervals for medium values
-    }
+    // Round up max to the next 50
+    const roundedMax = Math.ceil(maxValue / 50) * 50;
 
-    // Create array of ticks with larger intervals
+    // Round down min to the previous 50 or 75% of min value, whichever is lower
+    // This creates some space below the lowest data point
+    const calculatedMin = Math.max(0, Math.floor((minValue * 0.75) / 50) * 50);
+
+    // Create ticks array with 50kg intervals
     const ticks = [];
-    for (let i = 0; i <= roundedMax; i += interval) {
+    for (let i = calculatedMin; i <= roundedMax; i += 50) {
       ticks.push(i);
     }
 
     return {
       max: roundedMax,
+      min: calculatedMin,
       ticks: ticks,
     };
   };
@@ -583,7 +747,7 @@ const AthleteStats = () => {
     paddingLeft: 15,
     paddingRight: 15,
     paddingTop: 30,
-    paddingBottom: 10,
+    paddingBottom: 25,
     propsForLabels: {
       fontSize: 10,
       fontWeight: "400",
@@ -617,12 +781,14 @@ const AthleteStats = () => {
     marginBottom: 25,
   };
 
+  const [selectedDataPoint, setSelectedDataPoint] = useState(null);
+  const [showDataPointModal, setShowDataPointModal] = useState(false);
+
   const renderChart = (data, title, color, dataKey) => {
-    // Add null check before rendering chart
     if (!data) {
       return (
         <View style={styles.singleChartContainer}>
-          <Text style={[styles.liftTitle, { color: color }]}>{title}</Text>
+          <Text style={styles.chartTitle}>{title}</Text>
           <View style={styles.loadingChartContainer}>
             <ActivityIndicator size="large" color={color} />
             <Text style={styles.loadingText}>Loading chart data...</Text>
@@ -634,81 +800,162 @@ const AthleteStats = () => {
     // Get y-axis configuration for this specific lift
     const yAxisConfig = getYAxisConfig(data);
 
+    // Check if there's any data for this year
+    // Consider it empty if all values are 0 or if the dataset is explicitly marked as empty
+    const hasData =
+      data.datasets[0].data.some((value) => value > 0) && !data.isEmpty;
+
+    if (!hasData) {
+      // Mark this dataset as empty but don't render anything
+      // The parent component will handle showing a single "No data" message
+      data.isEmpty = true;
+      return null;
+    }
+
+    // Filter out null values from the dataset
+    // We'll create a new dataset with only the months that have data
+    const filteredData = {
+      labels: [],
+      datasets: [{ data: [] }],
+      dates: [],
+      isPRMonth: [],
+    };
+
+    // Only include months that have actual data (non-null values)
+    data.datasets[0].data.forEach((value, index) => {
+      if (value !== null && value !== 0) {
+        filteredData.labels.push(data.labels[index]);
+        filteredData.datasets[0].data.push(value);
+        filteredData.dates.push(data.dates[index]);
+        filteredData.isPRMonth.push(data.isPRMonth[index]);
+      }
+    });
+
+    // If after filtering we have no data points, return null
+    if (filteredData.datasets[0].data.length === 0) {
+      data.isEmpty = true;
+      return null;
+    }
+
     // Update the dataset color to match the title color
-    const updatedData = {
-      ...data,
-      datasets: data.datasets.map((dataset) => ({
-        ...dataset,
-        color: (opacity = 1) =>
-          `${color}${Math.round(opacity * 255)
-            .toString(16)
-            .padStart(2, "0")}`,
-        // Add fill gradient color (gray) for area under the line
-        fillShadowGradient: "#CCCCCC",
-      })),
+    const chartData = {
+      labels: filteredData.labels,
+      datasets: [
+        {
+          data: filteredData.datasets[0].data,
+          color: (opacity = 1) =>
+            color +
+            Math.round(opacity * 255)
+              .toString(16)
+              .padStart(2, "0"),
+          strokeWidth: 3,
+        },
+      ],
+      dates: filteredData.dates,
+      isPRMonth: filteredData.isPRMonth,
+      scale: "monthly",
     };
 
     return (
       <View style={styles.singleChartContainer}>
-        <Text style={[styles.liftTitle, { color: color }]}>
-          {title}
-          {selectedMax?.type === dataKey && selectedMax?.weight && (
-            <Text style={styles.selectedDateText}>
-              {" "}
-              ({selectedMax.weight}kg)
-            </Text>
-          )}
-        </Text>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>{title}</Text>
+        </View>
 
         <LineChart
-          data={updatedData}
-          width={chartWidth}
-          height={CHART_HEIGHT}
+          data={{
+            labels: chartData.labels,
+            datasets: chartData.datasets,
+          }}
+          width={Dimensions.get("window").width - 100}
+          height={180}
           chartConfig={{
-            ...chartConfig,
-            // Set colors for dots and lines to match title
-            propsForDots: {
-              r: "5",
-              strokeWidth: "2",
-              stroke: color,
-              fill: color,
+            backgroundColor: "#fff",
+            backgroundGradientFrom: "#fff",
+            backgroundGradientTo: "#fff",
+            decimalPlaces: 0,
+            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+            strokeWidth: 1,
+            barPercentage: 0.5,
+            useShadowColorFromDataset: true,
+            fillShadowGradientOpacity: 0.2,
+            propsForBackgroundLines: {
+              strokeDasharray: "5, 5",
+              strokeWidth: 1,
+              stroke: "rgba(0, 0, 0, 0.1)",
             },
-            // Adjust label styling to fit more labels
+            paddingLeft: 5,
+            paddingRight: 10,
+            paddingTop: 20,
+            paddingBottom: 20,
             propsForLabels: {
-              fontSize: 8, // Smaller font size for x-axis labels
+              fontSize: 8,
               fontWeight: "400",
-              textAnchor: "middle", // Center align the text
-              rotation: -45, // Angle the text to fit more labels
             },
           }}
-          bezier
-          style={[chartStyle, { backgroundColor: "#fff" }]}
-          fromZero={true}
+          onDataPointClick={({ index }) => {
+            // Only allow click on actual PR months
+            if (chartData.isPRMonth[index]) {
+              const weight = chartData.datasets[0].data[index];
+              const date = chartData.dates[index];
+              const month = chartData.labels[index];
+
+              // Set selected max for modal display
+              setSelectedMax({
+                type: dataKey,
+                weight: weight,
+                achievedAt: new Date(date),
+              });
+
+              // Show the modal
+              setShowMaxDateModal(true);
+            }
+          }}
+          bezier={false} // Use straight lines instead of bezier curves
+          withDots={true} // Show dots for each data point
+          fromZero={false} // Don't start y-axis from zero
+          style={{
+            marginVertical: 8,
+            borderRadius: 16,
+            padding: 0,
+            paddingBottom: 20,
+            backgroundColor: "#fff",
+            borderWidth: 1,
+            borderColor: "#f0f0f0",
+            marginBottom: 15,
+            marginLeft: -5,
+          }}
           withInnerLines={true}
           withOuterLines={true}
           withVerticalLines={true}
           withHorizontalLines={true}
-          withDots={true}
           withShadow={false}
-          segments={yAxisConfig.ticks.length - 1}
+          segments={4}
+          yAxisInterval={1}
           yAxisMax={yAxisConfig.max}
-          // Rotate labels slightly to fit more of them
-          horizontalLabelRotation={45}
-          verticalLabelRotation={0}
+          yAxisMin={yAxisConfig.min}
           yAxisSuffix="kg"
-          // Show every week label with W prefix
-          formatXLabel={(value) => `W${value}`}
-          xLabelsOffset={10}
-          withXAxisLabel={true}
-          // Add extra bottom padding to make room for the angled labels
-          chartConfig={{
-            ...chartConfig,
-            paddingBottom: 25,
-          }}
-          decorator={() => {
-            return selectedMax?.type === dataKey && selectedMax?.weight ? (
-              <View style={styles.selectedDot} />
-            ) : null;
+          formatXLabel={(value) => `${value}`}
+          // Use decorator instead of renderDotContent
+          decorator={({ x, y, index, value }) => {
+            // Only render dots for PR months
+            if (!chartData.isPRMonth[index]) return null;
+
+            return (
+              <View
+                key={index}
+                style={{
+                  position: "absolute",
+                  left: x - 4,
+                  top: y - 4,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: color,
+                }}
+              />
+            );
           }}
         />
       </View>
@@ -743,9 +990,514 @@ const AthleteStats = () => {
     });
   };
 
+  // Calculate the max weights for the selected year only
+  const calculateYearMaxes = (squatData, benchData, deadliftData, year) => {
+    const getYearMax = (progressionData) => {
+      if (!progressionData || progressionData.length === 0) {
+        return { weight: 0, achievedAt: null };
+      }
+
+      // Filter for the selected year
+      const yearData = progressionData.filter((entry) => {
+        const entryDate =
+          entry.date instanceof Date ? entry.date : entry.date.toDate();
+        return entryDate.getFullYear().toString() === year;
+      });
+
+      if (yearData.length === 0) {
+        return { weight: 0, achievedAt: null };
+      }
+
+      // Find the max weight for this year
+      let maxWeight = 0;
+      yearData.forEach((entry) => {
+        maxWeight = Math.max(maxWeight, entry.weight);
+      });
+
+      // Find the latest date with this max weight
+      let latestDate = null;
+      yearData.forEach((entry) => {
+        if (entry.weight === maxWeight) {
+          const entryDate =
+            entry.date instanceof Date ? entry.date : entry.date.toDate();
+          if (!latestDate || entryDate > latestDate) {
+            latestDate = entryDate;
+          }
+        }
+      });
+
+      return {
+        weight: maxWeight,
+        achievedAt: latestDate,
+      };
+    };
+
+    return {
+      squat: getYearMax(squatData),
+      bench: getYearMax(benchData),
+      deadlift: getYearMax(deadliftData),
+    };
+  };
+
+  // Generate demo data function
+  const generateDemoData = (shouldSaveState = true) => {
+    setIsLoading(true);
+
+    // Use fixed years starting from 2021 instead of relative years
+    const startYear = 2021;
+    const endYear = 2025;
+
+    // Create mock user data to match coach's implementation
+    const mockUser = {
+      firstName: "Demo",
+      lastName: "User",
+      profileColor: "#A8E6CF",
+    };
+
+    // Generate 5 years of progression data with more realistic patterns and few missing months
+    const generateProgression = (startWeight, yearlyIncrease, liftType) => {
+      const progression = [];
+
+      // Maximum weights to cap progression
+      const maxWeights = {
+        squat: 250, // Match coach's implementation
+        bench: 140, // Match coach's implementation
+        deadlift: 270, // Match coach's implementation
+      };
+
+      // Define the final weight for each year
+      const yearEndWeights = {};
+      for (let yearOffset = 0; yearOffset < 5; yearOffset++) {
+        const year = (startYear + yearOffset).toString();
+        // Year end weight increases by the yearly increase amount, with more modest effect
+        const dramaticIncrease = yearlyIncrease * (1.2 + yearOffset * 0.15); // More realistic increases each year
+
+        // Calculate how much to add this year
+        let calculatedWeight = Math.round(
+          startWeight + dramaticIncrease * yearOffset
+        );
+
+        // Cap the weight at the maximum for each lift type
+        if (calculatedWeight > maxWeights[liftType]) {
+          calculatedWeight = maxWeights[liftType];
+        }
+
+        yearEndWeights[year] = calculatedWeight;
+      }
+
+      // Track the all-time best to avoid regressions
+      let allTimeBest = startWeight - 5;
+
+      // Track the highest weight achieved in each year
+      const yearHighestWeights = {};
+
+      // Create unique progression patterns for each lift in each year
+      const createProgressPattern = (year, liftType) => {
+        const yearIndex = year - startYear;
+
+        // Months in each year we'll skip (no PRs)
+        // Only skip 2-3 months per year for more continuous data
+        const monthsToSkip = new Set();
+
+        // Different lifts skip different months
+        switch (liftType) {
+          case "squat":
+            // Squat: Skip a couple months based on year
+            if (year === 2021) {
+              monthsToSkip.add(3); // Skip April
+              monthsToSkip.add(7); // Skip August
+            } else if (year === 2022) {
+              monthsToSkip.add(1); // Skip February
+              monthsToSkip.add(9); // Skip October
+            } else if (year === 2023) {
+              monthsToSkip.add(2); // Skip March
+              monthsToSkip.add(8); // Skip September
+            } else if (year === 2024) {
+              monthsToSkip.add(4); // Skip May
+              monthsToSkip.add(10); // Skip November
+            } else {
+              monthsToSkip.add(5); // Skip June
+              monthsToSkip.add(11); // Skip December
+            }
+            break;
+
+          case "bench":
+            // Bench: Skip different months
+            if (year === 2021) {
+              monthsToSkip.add(2); // Skip March
+              monthsToSkip.add(9); // Skip October
+            } else if (year === 2022) {
+              monthsToSkip.add(4); // Skip May
+              monthsToSkip.add(11); // Skip December
+            } else if (year === 2023) {
+              monthsToSkip.add(1); // Skip February
+              monthsToSkip.add(6); // Skip July
+            } else if (year === 2024) {
+              monthsToSkip.add(3); // Skip April
+              monthsToSkip.add(8); // Skip September
+            } else {
+              monthsToSkip.add(0); // Skip January
+              monthsToSkip.add(7); // Skip August
+            }
+            break;
+
+          case "deadlift":
+            // Deadlift: Skip different months
+            if (year === 2021) {
+              monthsToSkip.add(1); // Skip February
+              monthsToSkip.add(8); // Skip September
+            } else if (year === 2022) {
+              monthsToSkip.add(3); // Skip April
+              monthsToSkip.add(10); // Skip November
+            } else if (year === 2023) {
+              monthsToSkip.add(5); // Skip June
+              monthsToSkip.add(9); // Skip October
+            } else if (year === 2024) {
+              monthsToSkip.add(0); // Skip January
+              monthsToSkip.add(7); // Skip August
+            } else {
+              monthsToSkip.add(2); // Skip March
+              monthsToSkip.add(6); // Skip July
+            }
+            break;
+        }
+
+        // Generate months with PRs (all months except those we skip)
+        const progressMonths = [];
+        for (let month = 0; month < 12; month++) {
+          if (!monthsToSkip.has(month)) {
+            progressMonths.push(month);
+          }
+        }
+
+        return {
+          months: progressMonths.sort((a, b) => a - b),
+          monthsToSkip: Array.from(monthsToSkip),
+        };
+      };
+
+      for (let year = startYear; year <= endYear; year++) {
+        const yearIndex = year - startYear;
+        const baseWeight = startWeight + yearIndex * yearlyIncrease * 1.2; // More realistic base increases
+        const yearString = year.toString();
+
+        // Get unique progression pattern for this lift and year
+        const progressPattern = createProgressPattern(year, liftType);
+        const sortedProgressMonths = progressPattern.months;
+
+        // Calculate the weight jumps
+        // Make jumps more dramatic with bigger increases
+        const totalProgressNeeded = yearEndWeights[yearString] - allTimeBest;
+        const prMonthCount = sortedProgressMonths.length;
+
+        // Big average jump for dramatic effect
+        const averageJumpPerProgressMonth = Math.max(
+          2, // Minimum 2kg jumps
+          Math.round((totalProgressNeeded / prMonthCount) * 1.2) // Increase by 20%
+        );
+
+        // Only create entries for months with PRs
+        let currentYearBest = allTimeBest;
+
+        // Initialize the highest weight for this year
+        yearHighestWeights[yearString] = currentYearBest;
+
+        // Add plateaus - determine how many months will plateau
+        const plateauCount = Math.floor(sortedProgressMonths.length * 0.4); // About 40% of months will plateau
+        const plateauMonths = new Set();
+
+        // Randomly select months to plateau (except first and last month)
+        for (
+          let i = 0;
+          i < plateauCount && sortedProgressMonths.length > 3;
+          i++
+        ) {
+          // Skip first and last month for plateaus
+          const randomIndex =
+            1 + Math.floor(Math.random() * (sortedProgressMonths.length - 2));
+          plateauMonths.add(randomIndex);
+        }
+
+        // Track the months we actually log PRs for
+        for (
+          let monthIndex = 0;
+          monthIndex < sortedProgressMonths.length;
+          monthIndex++
+        ) {
+          const month = sortedProgressMonths[monthIndex];
+
+          // Add realistic variability in jumps
+          let jumpMultiplier = 1.0;
+
+          // Check if this month should plateau (no increase)
+          if (plateauMonths.has(monthIndex)) {
+            jumpMultiplier = 0; // No increase for plateau months
+          }
+          // First PR of the year is bigger
+          else if (monthIndex === 0) {
+            jumpMultiplier = 1.5; // 50% bigger jump to start the year
+          }
+          // Last PR of the year is also bigger
+          else if (monthIndex === sortedProgressMonths.length - 1) {
+            // For the last month, calculate exactly what's needed to reach the year-end target
+            const remainingProgress =
+              yearEndWeights[yearString] - currentYearBest;
+            if (remainingProgress > 0) {
+              // Set a specific increase to hit the target exactly
+              const increase = remainingProgress;
+              currentYearBest += increase;
+
+              // Skip the rest of the loop since we've already updated currentYearBest
+              const date = new Date(
+                year,
+                month,
+                10 + Math.floor(Math.random() * 15)
+              );
+
+              // Double check the date is in the correct year
+              if (date.getFullYear() !== year) {
+                date.setFullYear(year);
+              }
+
+              progression.push({
+                weight: currentYearBest,
+                date,
+              });
+
+              // Update the highest weight achieved this year
+              yearHighestWeights[yearString] = Math.max(
+                yearHighestWeights[yearString],
+                currentYearBest
+              );
+
+              continue; // Skip to the next month
+            } else {
+              jumpMultiplier = 0; // Plateau if we're already at or above the target
+            }
+          }
+          // Special big jumps occasionally (15% chance)
+          else if (Math.random() < 0.15) {
+            jumpMultiplier = 1.8; // 1.8x sized breakthrough
+          }
+          // Add more plateaus (25% chance)
+          else if (Math.random() < 0.25) {
+            jumpMultiplier = 0; // No increase for random plateaus
+          }
+          // Middle PRs are variable
+          else {
+            // Add more randomness with realistic average
+            jumpMultiplier = 0.8 + Math.random() * 0.7; // 0.8-1.5x
+          }
+
+          // Customize PR jumps by lift type
+          switch (liftType) {
+            case "squat":
+              // Squat tends to have bigger jumps
+              jumpMultiplier *= 1.2;
+              break;
+            case "bench":
+              // Bench has smaller but more consistent jumps
+              jumpMultiplier *= 0.9;
+              break;
+            case "deadlift":
+              // Deadlift has the biggest jumps
+              jumpMultiplier *= 1.3;
+              break;
+          }
+
+          // Apply dramatic jumps
+          const increase = Math.round(
+            averageJumpPerProgressMonth * jumpMultiplier
+          );
+
+          // Ensure we never decrease - either increase or plateau
+          if (increase > 0) {
+            currentYearBest += increase;
+          }
+
+          // Make sure we don't exceed the year-end target too early
+          if (
+            month < 9 &&
+            currentYearBest >= yearEndWeights[yearString] &&
+            monthIndex < sortedProgressMonths.length - 1
+          ) {
+            currentYearBest = Math.max(
+              yearEndWeights[yearString] - Math.ceil(Math.random() * 10),
+              currentYearBest // Ensure we don't go below current best
+            );
+          }
+
+          // Ensure we hit the year-end target exactly with the last PR of the year
+          if (monthIndex === sortedProgressMonths.length - 1) {
+            currentYearBest = yearEndWeights[yearString];
+          }
+
+          // Update the highest weight achieved this year
+          yearHighestWeights[yearString] = Math.max(
+            yearHighestWeights[yearString],
+            currentYearBest
+          );
+
+          // Only log entry on PR months
+          // Create a date for this month (different day each time for realism)
+          const date = new Date(
+            year,
+            month,
+            10 + Math.floor(Math.random() * 15)
+          );
+
+          // Double check the date is in the correct year
+          if (date.getFullYear() !== year) {
+            // Correct the year if needed
+            date.setFullYear(year);
+          }
+
+          progression.push({
+            weight: currentYearBest,
+            date,
+          });
+        }
+
+        // Ensure the year-end weight matches the highest weight achieved
+        yearEndWeights[yearString] = yearHighestWeights[yearString];
+
+        // Update the all-time best after each year
+        // This ensures the next year starts at least at the highest weight achieved this year
+        allTimeBest = yearHighestWeights[yearString];
+      }
+
+      return progression;
+    };
+
+    // Generate mock progression data with 2021 starting weights and more realistic patterns
+    // Use the exact same starting weights and yearly increases as in ClientsStats.js
+    const squatProgression = generateProgression(50, 15, "squat"); // Start: 50kg in 2021, +15kg/year
+    const benchProgression = generateProgression(30, 9, "bench"); // Start: 30kg in 2021, +9kg/year
+    const deadliftProgression = generateProgression(60, 18, "deadlift"); // Start: 60kg in 2021, +18kg/year
+
+    // Calculate year maxes
+    const yearMaxes = calculateYearMaxes(
+      squatProgression,
+      benchProgression,
+      deadliftProgression,
+      selectedYear
+    );
+
+    // Process data for charts
+    const processedSquatData = processProgressionData(
+      squatProgression,
+      selectedYear
+    );
+    const processedBenchData = processProgressionData(
+      benchProgression,
+      selectedYear
+    );
+    const processedDeadliftData = processProgressionData(
+      deadliftProgression,
+      selectedYear
+    );
+
+    // Update state with demo data
+    setUserData(mockUser);
+    setSquatData(processedSquatData);
+    setBenchData(processedBenchData);
+    setDeadliftData(processedDeadliftData);
+    setCurrentMaxes(yearMaxes);
+
+    // Store the original progression data for year changes
+    setDemoProgressionData({
+      squatProgression,
+      benchProgression,
+      deadliftProgression,
+    });
+
+    // Update input fields with current maxes
+    setNewSquatMax(yearMaxes.squat.weight.toString());
+    setNewBenchMax(yearMaxes.bench.weight.toString());
+    setNewDeadliftMax(yearMaxes.deadlift.weight.toString());
+
+    // Set demo data flag
+    setIsDemoData(true);
+    setIsLoading(false);
+
+    // If the selected year is outside our range, select the first year
+    if (
+      parseInt(selectedYear) < startYear ||
+      parseInt(selectedYear) > endYear
+    ) {
+      handleYearSelect(startYear.toString());
+    }
+
+    // Save demo data state to AsyncStorage if requested
+    if (shouldSaveState) {
+      saveDemoDataState(true);
+    }
+  };
+
+  // Refresh function
+  const onRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    console.log(`[DEBUG] Refreshing data for year: ${selectedYear}`);
+
+    if (isDemoData && demoProgressionData) {
+      // For demo data, recalculate with the current year
+      const yearMaxes = calculateYearMaxes(
+        demoProgressionData.squatProgression,
+        demoProgressionData.benchProgression,
+        demoProgressionData.deadliftProgression,
+        selectedYear
+      );
+
+      // Process data for charts
+      const processedSquatData = processProgressionData(
+        demoProgressionData.squatProgression,
+        selectedYear
+      );
+      const processedBenchData = processProgressionData(
+        demoProgressionData.benchProgression,
+        selectedYear
+      );
+      const processedDeadliftData = processProgressionData(
+        demoProgressionData.deadliftProgression,
+        selectedYear
+      );
+
+      // Update chart data
+      setSquatData(processedSquatData);
+      setBenchData(processedBenchData);
+      setDeadliftData(processedDeadliftData);
+      setCurrentMaxes(yearMaxes);
+    } else {
+      // For real data, reload from Firebase with the selected year
+      await loadUserData(selectedYear);
+    }
+
+    setIsRefreshing(false);
+  }, [selectedYear, isDemoData, demoProgressionData]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>My Analytics</Text>
+
+      <TouchableOpacity
+        style={styles.testButton}
+        onPress={() => generateDemoData(true)}
+      >
+        <Text style={styles.testButtonText}>Load Demo Data</Text>
+      </TouchableOpacity>
+
+      {isDemoData && (
+        <TouchableOpacity
+          style={[styles.testButton, { marginTop: 10 }]}
+          onPress={async () => {
+            setIsDemoData(false);
+            await saveDemoDataState(false);
+            await loadUserData();
+          }}
+        >
+          <Text style={styles.testButtonText}>Return to My Data</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Current Max Lifts Display */}
       <View style={styles.maxLiftsContainer}>
@@ -810,6 +1562,9 @@ const AthleteStats = () => {
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContentContainer}
         showsVerticalScrollIndicator={true}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+        }
       >
         <View style={styles.headerContainer}>
           <View>
@@ -823,46 +1578,120 @@ const AthleteStats = () => {
             onPress={() => setShowYearDropdown(true)}
           >
             <Text style={styles.yearLabel}>{selectedYear}</Text>
-            <Icon
-              name="chevron-down"
-              size={16}
-              color="#666"
-              style={styles.dropdownIcon}
-            />
+            <Icon name="chevron-down" size={16} color="#666" />
           </TouchableOpacity>
         </View>
 
-        {/* Ensure data exists before rendering charts */}
-        {squatData ? (
-          renderChart(squatData, "Squat", colors.squat, "squat")
-        ) : (
-          <View style={styles.loadingChartContainer}>
-            <ActivityIndicator size="large" color={colors.squat} />
-          </View>
-        )}
+        {/* Year dropdown modal */}
+        <Modal
+          visible={showYearDropdown}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowYearDropdown(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowYearDropdown(false)}
+          >
+            <View style={styles.yearDropdownContainer}>
+              <View style={styles.yearDropdown}>
+                {availableYears.map((year) => (
+                  <TouchableOpacity
+                    key={year}
+                    style={[
+                      styles.yearOption,
+                      selectedYear === year && styles.selectedYearOption,
+                    ]}
+                    onPress={() => handleYearSelect(year)}
+                  >
+                    <Text
+                      style={[
+                        styles.yearOptionText,
+                        selectedYear === year && styles.selectedYearOptionText,
+                      ]}
+                    >
+                      {year}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
-        {benchData ? (
-          renderChart(benchData, "Bench Press", colors.benchPress, "bench")
-        ) : (
-          <View style={styles.loadingChartContainer}>
-            <ActivityIndicator size="large" color={colors.benchPress} />
+        {/* Chart content */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#000" />
           </View>
-        )}
-
-        {deadliftData ? (
-          renderChart(deadliftData, "Deadlift", colors.deadlift, "deadlift")
         ) : (
-          <View style={styles.loadingChartContainer}>
-            <ActivityIndicator size="large" color={colors.deadlift} />
-          </View>
-        )}
+          <>
+            {/* Check if there's any data for the selected year */}
+            {(!squatData ||
+              squatData.isEmpty ||
+              (squatData.datasets[0].data.length === 1 &&
+                squatData.datasets[0].data[0] === 0)) &&
+            (!benchData ||
+              benchData.isEmpty ||
+              (benchData.datasets[0].data.length === 1 &&
+                benchData.datasets[0].data[0] === 0)) &&
+            (!deadliftData ||
+              deadliftData.isEmpty ||
+              (deadliftData.datasets[0].data.length === 1 &&
+                deadliftData.datasets[0].data[0] === 0)) ? (
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noDataText}>
+                  No lift data available for {selectedYear}
+                </Text>
+                <Text
+                  style={[
+                    styles.noDataText,
+                    { fontSize: 14, marginTop: 10, fontWeight: "400" },
+                  ]}
+                >
+                  Try selecting a different year or add new lifts
+                </Text>
+              </View>
+            ) : (
+              <>
+                {squatData ? (
+                  renderChart(squatData, "Squat", colors.squat, "squat")
+                ) : (
+                  <View style={styles.loadingChartContainer}>
+                    <ActivityIndicator size="large" color={colors.squat} />
+                  </View>
+                )}
 
-        {/* Touch area to clear tooltip when tapping elsewhere */}
-        <TouchableOpacity
-          style={styles.clearTooltipArea}
-          activeOpacity={1}
-          onPress={() => setTooltipData(null)}
-        />
+                {benchData ? (
+                  renderChart(
+                    benchData,
+                    "Bench Press",
+                    colors.benchPress,
+                    "bench"
+                  )
+                ) : (
+                  <View style={styles.loadingChartContainer}>
+                    <ActivityIndicator size="large" color={colors.benchPress} />
+                  </View>
+                )}
+
+                {deadliftData ? (
+                  renderChart(
+                    deadliftData,
+                    "Deadlift",
+                    colors.deadlift,
+                    "deadlift"
+                  )
+                ) : (
+                  <View style={styles.loadingChartContainer}>
+                    <ActivityIndicator size="large" color={colors.deadlift} />
+                  </View>
+                )}
+              </>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* Max Date Modal */}
@@ -878,18 +1707,39 @@ const AthleteStats = () => {
           onPress={() => setShowMaxDateModal(false)}
         >
           <View style={styles.maxDateContainer}>
-            <Text style={styles.maxDateTitle}>
-              {selectedMax?.type?.charAt(0).toUpperCase() +
-                selectedMax?.type?.slice(1)}{" "}
-              Max
-            </Text>
-            <Text style={styles.maxDateWeight}>{selectedMax?.weight} kg</Text>
-            <Text style={styles.maxDateLabel}>Achieved on:</Text>
-            <Text style={styles.maxDateValue}>
-              {selectedMax?.achievedAt
-                ? formatTimestamp(selectedMax.achievedAt)
-                : "N/A"}
-            </Text>
+            {selectedMax && (
+              <>
+                <Text
+                  style={[
+                    styles.maxDateTitle,
+                    {
+                      color:
+                        selectedMax.type === "squat"
+                          ? colors.squat
+                          : selectedMax.type === "bench"
+                          ? colors.benchPress
+                          : colors.deadlift,
+                    },
+                  ]}
+                >
+                  {selectedMax.type === "squat"
+                    ? "Squat"
+                    : selectedMax.type === "bench"
+                    ? "Bench Press"
+                    : "Deadlift"}{" "}
+                  Max
+                </Text>
+                <Text style={styles.maxDateWeight}>
+                  {selectedMax.weight} kg
+                </Text>
+                <Text style={styles.maxDateLabel}>Achieved on</Text>
+                <Text style={styles.maxDateValue}>
+                  {selectedMax.achievedAt
+                    ? formatTimestamp(selectedMax.achievedAt)
+                    : "Unknown date"}
+                </Text>
+              </>
+            )}
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowMaxDateModal(false)}
@@ -900,117 +1750,80 @@ const AthleteStats = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Year Dropdown Modal */}
-      <Modal
-        visible={showYearDropdown}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowYearDropdown(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowYearDropdown(false)}
-        >
-          <View style={styles.dropdownContainer}>
-            <ScrollView>
-              {years.map((year) => (
-                <TouchableOpacity
-                  key={year}
-                  style={[
-                    styles.yearOption,
-                    selectedYear === year && styles.selectedYearOption,
-                  ]}
-                  onPress={() => handleYearSelect(year)}
-                >
-                  <Text
-                    style={[
-                      styles.yearOptionText,
-                      selectedYear === year && styles.selectedYearOptionText,
-                    ]}
-                  >
-                    {year}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
       {/* Update Max Lifts Modal */}
       <Modal
         visible={showUpdateModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowUpdateModal(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        <TouchableOpacity
           style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowUpdateModal(false)}
         >
-          <View style={styles.updateModalContainer}>
-            <Text style={styles.updateModalTitle}>Update Max Lifts</Text>
-            <Text style={styles.updateModalSubtitle}>
-              Enter values only for the lifts you want to update
-            </Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+          >
+            <View style={styles.updateModalContainer}>
+              <Text style={styles.updateModalTitle}>Update Max Lifts</Text>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Squat (kg)</Text>
-              <TextInput
-                style={styles.input}
-                value={newSquatMax}
-                onChangeText={setNewSquatMax}
-                keyboardType="numeric"
-                placeholder="Enter your squat max"
-              />
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Squat (kg)</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={newSquatMax}
+                  onChangeText={setNewSquatMax}
+                  placeholder="Enter squat max"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Bench Press (kg)</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={newBenchMax}
+                  onChangeText={setNewBenchMax}
+                  placeholder="Enter bench max"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Deadlift (kg)</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={newDeadliftMax}
+                  onChangeText={setNewDeadliftMax}
+                  placeholder="Enter deadlift max"
+                />
+              </View>
+
+              <View style={styles.modalButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setShowUpdateModal(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={handleUpdateMaxes}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Bench Press (kg)</Text>
-              <TextInput
-                style={styles.input}
-                value={newBenchMax}
-                onChangeText={setNewBenchMax}
-                keyboardType="numeric"
-                placeholder="Enter your bench max"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Deadlift (kg)</Text>
-              <TextInput
-                style={styles.input}
-                value={newDeadliftMax}
-                onChangeText={setNewDeadliftMax}
-                keyboardType="numeric"
-                placeholder="Enter your deadlift max"
-              />
-            </View>
-
-            <View style={styles.modalButtonsContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowUpdateModal(false)}
-                disabled={isUpdating}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleUpdateMaxes}
-                disabled={isUpdating}
-              >
-                {isUpdating ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.saveButtonText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -1021,7 +1834,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 40,
-    paddingTop: 140,
+    paddingTop: 100,
   },
   scrollContainer: {
     flex: 1,
@@ -1032,7 +1845,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 30,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: 20,
   },
   updateButton: {
     backgroundColor: "#000",
@@ -1048,19 +1861,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   singleChartContainer: {
+    width: Dimensions.get("window").width - 32,
+    marginRight: 100,
     marginBottom: 30,
-    width: "100%",
-    // Increase padding to ensure content stays within bounds
-    paddingHorizontal: 5,
-    paddingTop: 10, // Add top padding
-    paddingBottom: 15, // Add bottom padding
     backgroundColor: "#fff",
     borderRadius: 10,
+    padding: 15,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   titleContainer: {
     marginBottom: 25, // Increased space between title and chart
@@ -1072,7 +1883,7 @@ const styles = StyleSheet.create({
     marginTop: 5, // Reduced margin to prevent gap
   },
   loadingContainer: {
-    height: CHART_HEIGHT,
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1081,15 +1892,23 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   noDataContainer: {
-    height: CHART_HEIGHT,
-    justifyContent: "center",
+    padding: 30,
     alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    marginVertical: 40,
     backgroundColor: "#f9f9f9",
-    borderRadius: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#eee",
+    width: "90%",
+    alignSelf: "center",
   },
   noDataText: {
+    fontSize: 18,
     color: "#666",
-    fontSize: 14,
+    textAlign: "center",
+    fontWeight: "500",
   },
   tooltipWrapper: {
     position: "absolute",
@@ -1185,8 +2004,8 @@ const styles = StyleSheet.create({
   },
   chartTitle: {
     fontSize: 16,
-    fontWeight: "500",
-    alignSelf: "flex-start",
+    fontWeight: "600",
+    color: "#333",
   },
   headerContainer: {
     flexDirection: "row",
@@ -1198,13 +2017,16 @@ const styles = StyleSheet.create({
   yearContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    padding: 5,
+    backgroundColor: "#f8f8f8",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   yearLabel: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#666",
+    fontWeight: "600",
+    color: "#333",
+    marginRight: 5,
   },
   dropdownIcon: {
     marginTop: 2,
@@ -1298,7 +2120,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   yearOption: {
-    padding: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
@@ -1420,12 +2243,53 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   loadingChartContainer: {
-    height: 200,
+    height: 180,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#fff",
     borderRadius: 10,
-    marginBottom: 30,
+    marginBottom: 15,
+  },
+  testButton: {
+    marginBottom: 20,
+    alignSelf: "flex-end",
+    paddingHorizontal: 0,
+  },
+  testButtonText: {
+    color: "#666",
+    fontSize: 12,
+  },
+  headerSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  yearDropdownContainer: {
+    position: "absolute",
+    top: 150,
+    right: 20,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 0,
+    width: 120,
+    maxHeight: 300,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1000,
+  },
+  yearDropdown: {
+    // Add your year options here
+  },
+  chartHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+    paddingHorizontal: 10,
   },
 });
 

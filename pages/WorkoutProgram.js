@@ -1029,6 +1029,45 @@ const WorkoutProgram = ({ route }) => {
     // Add local state for notes
     const [notes, setNotes] = useState(exercise.notes || "");
 
+    // Add state for previous week's weights
+    const [previousWeekWeights, setPreviousWeekWeights] = useState([]);
+
+    // Find previous week's weight for the same exercise
+    useEffect(() => {
+      if (weekIndex > 0 && exercise.name) {
+        try {
+          // Get the previous week's ID
+          const previousWeekId = weeks[weekIndex - 1]?.id;
+          if (!previousWeekId) return;
+
+          // Get days from the previous week
+          const previousWeekDays = days[previousWeekId] || [];
+
+          // Find matching exercise in the previous week by name
+          let foundPreviousWeights = [];
+
+          for (const day of previousWeekDays) {
+            const previousExercises = exercises[day.id] || [];
+            const matchingExercise = previousExercises.find(
+              (ex) => ex.name.toLowerCase() === exercise.name.toLowerCase()
+            );
+
+            if (matchingExercise && matchingExercise.sets) {
+              // Found matching exercise, get the weights
+              foundPreviousWeights = matchingExercise.sets.map(
+                (set) => set.weight || ""
+              );
+              break;
+            }
+          }
+
+          setPreviousWeekWeights(foundPreviousWeights);
+        } catch (error) {
+          console.error("Error finding previous week's weights:", error);
+        }
+      }
+    }, [weekIndex, exercise.name, weeks, days, exercises]);
+
     // Add handler to update exercise in Firestore when input loses focus
     const handleNameBlur = () => {
       if (exerciseName !== exercise.name) {
@@ -1111,7 +1150,12 @@ const WorkoutProgram = ({ route }) => {
                   }
                   onBlur={() => handleSetValueBlur(setIndex, "weight")}
                   keyboardType="numeric"
-                  placeholder="0"
+                  placeholder={
+                    previousWeekWeights[setIndex]
+                      ? `Last: ${previousWeekWeights[setIndex]}`
+                      : "0"
+                  }
+                  placeholderTextColor="#aaa"
                   editable={true}
                 />
                 <TouchableOpacity

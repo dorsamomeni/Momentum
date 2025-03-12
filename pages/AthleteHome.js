@@ -91,19 +91,21 @@ const AthleteHome = () => {
             if (blockData.startDate) {
               // Handle Firestore timestamp format
               if (blockData.startDate.seconds) {
-                const startDateObj = new Date(blockData.startDate.seconds * 1000);
+                const startDateObj = new Date(
+                  blockData.startDate.seconds * 1000
+                );
                 blockData.startDate = formatDate(startDateObj);
-              } 
+              }
               // Handle Date object
               else if (blockData.startDate instanceof Date) {
                 blockData.startDate = formatDate(blockData.startDate);
               }
               // Handle Firestore toDate() function
-              else if (typeof blockData.startDate.toDate === 'function') {
+              else if (typeof blockData.startDate.toDate === "function") {
                 blockData.startDate = formatDate(blockData.startDate.toDate());
               }
               // Handle string date that's already formatted
-              else if (typeof blockData.startDate === 'string') {
+              else if (typeof blockData.startDate === "string") {
                 // Keep it as is if it's already a string
               }
               // Handle all other cases
@@ -118,17 +120,17 @@ const AthleteHome = () => {
               if (blockData.endDate.seconds) {
                 const endDateObj = new Date(blockData.endDate.seconds * 1000);
                 blockData.endDate = formatDate(endDateObj);
-              } 
+              }
               // Handle Date object
               else if (blockData.endDate instanceof Date) {
                 blockData.endDate = formatDate(blockData.endDate);
               }
               // Handle Firestore toDate() function
-              else if (typeof blockData.endDate.toDate === 'function') {
+              else if (typeof blockData.endDate.toDate === "function") {
                 blockData.endDate = formatDate(blockData.endDate.toDate());
               }
               // Handle string date that's already formatted
-              else if (typeof blockData.endDate === 'string') {
+              else if (typeof blockData.endDate === "string") {
                 // Keep it as is if it's already a string
               }
               // Handle all other cases
@@ -391,7 +393,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 40,
-    paddingTop: 140,
+    paddingTop: 100,
   },
   header: {
     flexDirection: "row",
@@ -404,10 +406,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   title: {
-    fontSize: 25,
+    fontSize: 30,
     fontWeight: "bold",
     paddingBottom: 0,
-    paddingRight: 10,
+    paddingRight: 5,
   },
   buttonContainer: {
     flexDirection: "row",
@@ -612,7 +614,7 @@ const styles = StyleSheet.create({
 // Add a helper function to format dates consistently
 const formatDate = (date) => {
   if (!date) return "N/A";
-  
+
   try {
     // Validate the date is valid
     if (!(date instanceof Date) || isNaN(date.getTime())) {

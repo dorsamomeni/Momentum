@@ -44,13 +44,6 @@ const Settings = () => {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.backButtonText}>←</Text>
-      </TouchableOpacity>
-
       <ScrollView style={styles.scrollContainer}>
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
@@ -112,24 +105,13 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
-  backButton: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    zIndex: 10,
-    padding: 10,
-  },
-  backButtonText: {
-    fontSize: 28,
-    color: "#000",
-  },
   header: {
-    paddingTop: 100,
+    paddingTop: 60,
     paddingHorizontal: 20,
     marginBottom: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "bold",
   },
   section: {
