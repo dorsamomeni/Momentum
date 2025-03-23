@@ -553,7 +553,8 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     marginBottom: 20,
-    marginTop: 60,
+    marginTop: 40,
+    paddingLeft: 15,
   },
   searchContainer: {
     flexDirection: "row",

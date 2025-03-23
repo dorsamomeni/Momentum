@@ -14,7 +14,6 @@ import { auth, db } from "../src/config/firebase";
 import { doc, getDoc, enableIndexedDbPersistence } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 
-// Enable offline persistence
 enableIndexedDbPersistence(db).catch((err) => {
   console.log("Persistence error:", err);
 });

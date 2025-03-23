@@ -10,7 +10,13 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { auth, db } from "../src/config/firebase";
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+} from "firebase/firestore";
 
 const CoachRequests = () => {
   const navigation = useNavigation();
@@ -24,11 +30,11 @@ const CoachRequests = () => {
         if (user) {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           const userData = userDoc.data();
-          
+
           // Get pending coach requests
           const pendingRequests = userData.coachRequests || [];
           const sentRequests = userData.sentRequests || [];
-          
+
           // Fetch coach details for each request
           const requestDetails = await Promise.all(
             pendingRequests.map(async (coachId) => {
@@ -39,7 +45,7 @@ const CoachRequests = () => {
               };
             })
           );
-          
+
           // Fetch details of sent requests
           const sentRequestDetails = await Promise.all(
             sentRequests.map(async (userId) => {
@@ -50,7 +56,7 @@ const CoachRequests = () => {
               };
             })
           );
-          
+
           setRequests(requestDetails);
           setOutgoingRequests(sentRequestDetails);
         }
@@ -65,7 +71,7 @@ const CoachRequests = () => {
   const handleAcceptRequest = async (coachId) => {
     try {
       const athleteId = auth.currentUser.uid;
-      
+
       // Update athlete document
       const athleteRef = doc(db, "users", athleteId);
       await updateDoc(athleteRef, {
@@ -84,9 +90,9 @@ const CoachRequests = () => {
       });
 
       // Remove request from local state
-      setRequests(requests.filter(req => req.id !== coachId));
-      setOutgoingRequests(outgoingRequests.filter(req => req.id !== coachId));
-      
+      setRequests(requests.filter((req) => req.id !== coachId));
+      setOutgoingRequests(outgoingRequests.filter((req) => req.id !== coachId));
+
       Alert.alert("Success", "Coach request accepted");
       navigation.goBack();
     } catch (error) {
@@ -111,13 +117,37 @@ const CoachRequests = () => {
       });
 
       // Remove request from local state
-      setRequests(requests.filter(req => req.id !== coachId));
-      setOutgoingRequests(outgoingRequests.filter(req => req.id !== coachId));
-      
+      setRequests(requests.filter((req) => req.id !== coachId));
+      setOutgoingRequests(outgoingRequests.filter((req) => req.id !== coachId));
+
       Alert.alert("Success", "Request rejected");
     } catch (error) {
       console.error("Error rejecting request:", error);
       Alert.alert("Error", "Failed to reject request");
+    }
+  };
+
+  const handleCancelRequest = async (coachId) => {
+    try {
+      // Remove from athlete's sent requests
+      const athleteRef = doc(db, "users", auth.currentUser.uid);
+      await updateDoc(athleteRef, {
+        sentRequests: arrayRemove(coachId),
+      });
+
+      // Remove from coach's pending requests
+      const coachRef = doc(db, "users", coachId);
+      await updateDoc(coachRef, {
+        pendingRequests: arrayRemove(auth.currentUser.uid),
+      });
+
+      // Remove request from local state
+      setOutgoingRequests(outgoingRequests.filter((req) => req.id !== coachId));
+
+      Alert.alert("Success", "Request cancelled");
+    } catch (error) {
+      console.error("Error cancelling request:", error);
+      Alert.alert("Error", "Failed to cancel request");
     }
   };
 
@@ -141,12 +171,28 @@ const CoachRequests = () => {
           requests.map((coach) => (
             <View key={coach.id} style={styles.requestCard}>
               <View style={styles.requestInfo}>
-                <Text style={styles.coachName}>
-                  {coach.firstName} {coach.lastName}
-                </Text>
-                <Text style={styles.username}>@{coach.username}</Text>
+                <View style={styles.profileContainer}>
+                  <View
+                    style={[
+                      styles.profilePhoto,
+                      { backgroundColor: coach.profileColor || "#A8E6CF" },
+                    ]}
+                  >
+                    <Text style={styles.initial}>
+                      {coach.firstName && coach.firstName[0]
+                        ? coach.firstName[0].toUpperCase()
+                        : "?"}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.coachName}>
+                      {coach.firstName} {coach.lastName}
+                    </Text>
+                    <Text style={styles.username}>@{coach.username}</Text>
+                  </View>
+                </View>
               </View>
-              
+
               <View style={styles.actionButtons}>
                 <TouchableOpacity
                   style={[styles.actionButton, styles.acceptButton]}
@@ -165,7 +211,9 @@ const CoachRequests = () => {
           ))
         )}
 
-        <Text style={[styles.sectionTitle, styles.outgoingTitle]}>Sent Requests</Text>
+        <Text style={[styles.sectionTitle, styles.outgoingTitle]}>
+          Sent Requests
+        </Text>
         {outgoingRequests.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>No sent requests</Text>
@@ -174,16 +222,32 @@ const CoachRequests = () => {
           outgoingRequests.map((user) => (
             <View key={user.id} style={styles.requestCard}>
               <View style={styles.requestInfo}>
-                <Text style={styles.coachName}>
-                  {user.firstName} {user.lastName}
-                </Text>
-                <Text style={styles.username}>@{user.username}</Text>
+                <View style={styles.profileContainer}>
+                  <View
+                    style={[
+                      styles.profilePhoto,
+                      { backgroundColor: user.profileColor || "#A8E6CF" },
+                    ]}
+                  >
+                    <Text style={styles.initial}>
+                      {user.firstName && user.firstName[0]
+                        ? user.firstName[0].toUpperCase()
+                        : "?"}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.coachName}>
+                      {user.firstName} {user.lastName}
+                    </Text>
+                    <Text style={styles.username}>@{user.username}</Text>
+                  </View>
+                </View>
               </View>
               <TouchableOpacity
-                style={[styles.actionButton, styles.rejectButton]}
-                onPress={() => handleRejectRequest(user.id)}
+                style={[styles.actionButton, styles.cancelButton]}
+                onPress={() => handleCancelRequest(user.id)}
               >
-                <Icon name="close-outline" size={20} color="#000" />
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           ))
@@ -226,9 +290,28 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
   },
   requestInfo: {
     flex: 1,
+  },
+  profileContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  profilePhoto: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  initial: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#fff",
   },
   coachName: {
     fontSize: 16,
@@ -250,6 +333,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#f0f0f0",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   acceptButton: {
     backgroundColor: "#f0f0f0",
@@ -276,6 +362,16 @@ const styles = StyleSheet.create({
   outgoingTitle: {
     marginTop: 32,
   },
+  cancelButton: {
+    backgroundColor: "#f0f0f0",
+    width: "auto",
+    paddingHorizontal: 12,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#666",
+  },
 });
 
-export default CoachRequests; 
+export default CoachRequests;

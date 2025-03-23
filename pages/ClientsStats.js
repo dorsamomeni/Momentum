@@ -25,6 +25,7 @@ import {
   getDoc,
 } from "firebase/firestore";
 import Animated from "react-native/Libraries/Animated/Animated";
+import { Path } from "react-native-svg";
 
 const ClientsStats = ({ route }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -36,6 +37,13 @@ const ClientsStats = ({ route }) => {
   const [timeScale, setTimeScale] = useState("monthly"); // Always use monthly view
   const [zoomRange, setZoomRange] = useState(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Colors for charts - match AthleteStats.js
+  const colors = {
+    benchPress: "#FFB6C1",
+    squat: "#ADD8E6",
+    deadlift: "#90EE90",
+  };
 
   // Move the ref to the top level - don't declare hooks inside render functions
   const panRef = useRef(null);
@@ -124,214 +132,126 @@ const ClientsStats = ({ route }) => {
       // Create unique progression patterns for each lift in each year
       const createProgressPattern = (year, liftType) => {
         const yearIndex = year - startYear;
-
-        // Months in each year we'll skip (no PRs)
-        // Only skip 2-3 months per year for more continuous data
-        const monthsToSkip = new Set();
-
-        // Different lifts skip different months
-        switch (liftType) {
-          case "squat":
-            // Squat: Skip a couple months based on year
-            if (year === 2021) {
-              monthsToSkip.add(3); // Skip April
-              monthsToSkip.add(7); // Skip August
-            } else if (year === 2022) {
-              monthsToSkip.add(1); // Skip February
-              monthsToSkip.add(9); // Skip October
-            } else if (year === 2023) {
-              monthsToSkip.add(2); // Skip March
-              monthsToSkip.add(8); // Skip September
-            } else if (year === 2024) {
-              monthsToSkip.add(4); // Skip May
-              monthsToSkip.add(10); // Skip November
-            } else {
-              monthsToSkip.add(5); // Skip June
-              monthsToSkip.add(11); // Skip December
-            }
-            break;
-
-          case "bench":
-            // Bench: Skip different months
-            if (year === 2021) {
-              monthsToSkip.add(2); // Skip March
-              monthsToSkip.add(9); // Skip October
-            } else if (year === 2022) {
-              monthsToSkip.add(4); // Skip May
-              monthsToSkip.add(11); // Skip December
-            } else if (year === 2023) {
-              monthsToSkip.add(1); // Skip February
-              monthsToSkip.add(6); // Skip July
-            } else if (year === 2024) {
-              monthsToSkip.add(3); // Skip April
-              monthsToSkip.add(8); // Skip September
-            } else {
-              monthsToSkip.add(0); // Skip January
-              monthsToSkip.add(7); // Skip August
-            }
-            break;
-
-          case "deadlift":
-            // Deadlift: Skip different months
-            if (year === 2021) {
-              monthsToSkip.add(1); // Skip February
-              monthsToSkip.add(8); // Skip September
-            } else if (year === 2022) {
-              monthsToSkip.add(3); // Skip April
-              monthsToSkip.add(10); // Skip November
-            } else if (year === 2023) {
-              monthsToSkip.add(5); // Skip June
-              monthsToSkip.add(9); // Skip October
-            } else if (year === 2024) {
-              monthsToSkip.add(0); // Skip January
-              monthsToSkip.add(7); // Skip August
-            } else {
-              monthsToSkip.add(2); // Skip March
-              monthsToSkip.add(6); // Skip July
-            }
-            break;
-        }
-
-        // Get all months except those we want to skip
-        const progressMonths = [];
-        for (let month = 0; month < 12; month++) {
-          if (!monthsToSkip.has(month)) {
-            progressMonths.push(month);
-          }
-        }
-
+        // Return all months since we want data for every month
         return {
-          months: progressMonths.sort((a, b) => a - b),
-          monthsToSkip: Array.from(monthsToSkip),
+          months: Array.from({ length: 12 }, (_, i) => i), // All months 0-11
+          monthsToSkip: [], // No months to skip
         };
       };
 
       for (let year = startYear; year <= endYear; year++) {
         const yearIndex = year - startYear;
-        const baseWeight = startWeight + yearIndex * yearlyIncrease * 1.2; // More realistic base increases
+        const baseWeight = startWeight + yearIndex * yearlyIncrease * 1.2;
         const yearString = year.toString();
 
         console.log(
           `[${liftType}] Year ${year}: Base weight = ${baseWeight}kg, Target = ${yearEndWeights[yearString]}kg`
         );
 
-        // Get unique progression pattern for this lift and year
+        // Get progression pattern for all months
         const progressPattern = createProgressPattern(year, liftType);
         const sortedProgressMonths = progressPattern.months;
 
         // Calculate the weight jumps
-        // Make jumps more dramatic with bigger increases
         const totalProgressNeeded = yearEndWeights[yearString] - allTimeBest;
-        const prMonthCount = sortedProgressMonths.length;
+        const prMonthCount = 12; // All months will have data
 
-        // Big average jump for dramatic effect
+        // Calculate average monthly increase
         const averageJumpPerProgressMonth = Math.max(
-          3, // Minimum 3kg jumps instead of 6kg
-          Math.round((totalProgressNeeded / prMonthCount) * 1.2) // Increase by 20% instead of 50%
+          1, // Minimum 1kg jumps
+          Math.round((totalProgressNeeded / prMonthCount) * 1.2)
         );
 
-        // Only create entries for months with PRs
         let currentYearBest = allTimeBest;
 
-        // Track the months we actually log PRs for
-        for (
-          let monthIndex = 0;
-          monthIndex < sortedProgressMonths.length;
-          monthIndex++
-        ) {
-          const month = sortedProgressMonths[monthIndex];
-
+        // Process each month (all 12 months)
+        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
           // Add realistic variability in jumps
           let jumpMultiplier = 1.0;
 
-          // First PR of the year is bigger
-          if (monthIndex === 0) {
-            jumpMultiplier = 1.5; // 50% bigger jump to start the year
+          // Determine if this month should plateau (20% chance, but never for first or last month)
+          const shouldPlateau =
+            monthIndex > 0 && monthIndex < 11 && Math.random() < 0.2;
+
+          if (shouldPlateau) {
+            // Plateau - no increase this month
+            jumpMultiplier = 0;
           }
-          // Last PR of the year is also bigger
-          else if (monthIndex === sortedProgressMonths.length - 1) {
-            jumpMultiplier = 1.3; // 30% bigger jump to end the year
+          // First month of the year gets a bigger jump
+          else if (monthIndex === 0) {
+            jumpMultiplier = 1.5;
           }
-          // Special big jumps occasionally (20% chance)
-          else if (Math.random() < 0.2) {
-            jumpMultiplier = 1.8; // 1.8x sized breakthrough
+          // Last month hits the year-end target
+          else if (monthIndex === 11) {
+            const remainingProgress =
+              yearEndWeights[yearString] - currentYearBest;
+            if (remainingProgress > 0) {
+              currentYearBest += remainingProgress;
+            }
           }
-          // Middle PRs are variable
+          // Middle months get smaller, varied increases when not plateauing
           else {
-            // Add more randomness with realistic average
-            jumpMultiplier = 0.8 + Math.random() * 0.7; // 0.8-1.5x
+            // Add some randomness but ensure steady progress
+            jumpMultiplier = 0.5 + Math.random() * 0.5;
           }
 
-          // Customize PR jumps by lift type
-          switch (liftType) {
-            case "squat":
-              // Squat tends to have bigger jumps
-              jumpMultiplier *= 1.2;
-              break;
-            case "bench":
-              // Bench has smaller but more consistent jumps
-              jumpMultiplier *= 0.9;
-              break;
-            case "deadlift":
-              // Deadlift has the biggest jumps
-              jumpMultiplier *= 1.3;
-              break;
+          // Customize progression by lift type
+          if (!shouldPlateau) {
+            // Only apply lift-specific multipliers if not plateauing
+            switch (liftType) {
+              case "squat":
+                jumpMultiplier *= 1.2;
+                break;
+              case "bench":
+                jumpMultiplier *= 0.9;
+                break;
+              case "deadlift":
+                jumpMultiplier *= 1.3;
+                break;
+            }
           }
 
-          // Apply dramatic jumps
-          const increase = Math.round(
-            averageJumpPerProgressMonth * jumpMultiplier
-          );
-          currentYearBest += increase;
-
-          // Make sure we don't exceed the year-end target too early
-          if (
-            month < 9 &&
-            currentYearBest >= yearEndWeights[yearString] &&
-            monthIndex < sortedProgressMonths.length - 1
-          ) {
-            currentYearBest =
-              yearEndWeights[yearString] - Math.ceil(Math.random() * 10);
-          }
-
-          // Ensure we hit the year-end target exactly with the last PR of the year
-          if (monthIndex === sortedProgressMonths.length - 1) {
-            currentYearBest = yearEndWeights[yearString];
-            console.log(
-              `[DEBUG] ${liftType} final PR for ${yearString}: ${currentYearBest}kg`
+          // Calculate weight increase (no increase if plateauing)
+          if (monthIndex < 11 && !shouldPlateau) {
+            const increase = Math.max(
+              0.5,
+              Math.round(averageJumpPerProgressMonth * jumpMultiplier)
             );
+            currentYearBest += increase;
           }
 
-          // Only log entry on PR months
-          // Create a date for this month (different day each time for realism)
+          // Ensure we don't exceed the year-end target too early
+          if (
+            monthIndex < 11 &&
+            currentYearBest >= yearEndWeights[yearString]
+          ) {
+            currentYearBest = yearEndWeights[yearString] - 2;
+          }
+
+          // Create date for this month
           const date = new Date(
             year,
-            month,
+            monthIndex,
             10 + Math.floor(Math.random() * 15)
           );
-
-          // Double check the date is in the correct year
           if (date.getFullYear() !== year) {
-            console.error(
-              `[ERROR] Date year mismatch: expected ${year}, got ${date.getFullYear()}`
-            );
-            // Correct the year if needed
             date.setFullYear(year);
           }
 
+          // Add the progression point
           progression.push({
             weight: currentYearBest,
-            date,
+            date: date,
           });
 
           console.log(
             `[DEBUG] Added ${liftType} PR for ${year}-${
-              month + 1
-            }: ${currentYearBest}kg on ${date.toISOString()}`
+              monthIndex + 1
+            }: ${currentYearBest}kg${shouldPlateau ? " (plateau)" : ""}`
           );
         }
 
-        // Update the all-time best after each year
+        // Update all-time best
         allTimeBest = currentYearBest;
       }
 
@@ -885,68 +805,39 @@ const ClientsStats = ({ route }) => {
     });
 
     // Fill in the data array for all 12 months
-    const data = [];
-    const dates = [];
-    const validLabels = [];
-    const isPRMonth = []; // Track which points are actual PRs for rendering
+    const data = Array(12).fill(null); // Initialize with null values for all months
+    const dates = Array(12).fill(null);
+    const validLabels = monthLabels.slice(); // Copy all month labels
+    const isPRMonth = Array(12).fill(false); // Track which points are actual PRs for rendering
 
     // Keep track of highest weight so far to ensure no decreases
     let highestWeightSoFar = 0;
-    // Track consecutive months without PR to add small increases
-    let monthsWithoutPR = 0;
 
-    monthLabels.forEach((label, month) => {
-      validLabels.push(label); // Always include all month labels
+    // Only fill in data for months that have actual submissions
+    monthDataMap.forEach((value, month) => {
+      // Use actual data point for this month
+      let weightValue = value;
 
-      if (monthDataMap.has(month)) {
-        // Use actual data point for this month
-        let value = monthDataMap.get(month);
-
-        // Ensure weight never decreases
-        if (value < highestWeightSoFar) {
-          // If this month's weight is less than previous max, use previous max
-          value = highestWeightSoFar;
-          // This is no longer a PR month since we're using the previous max
-          isPRMonthMap.set(month, false);
-        } else {
-          // Update highest weight if this is higher
-          highestWeightSoFar = value;
-          // Reset consecutive non-PR counter
-          monthsWithoutPR = 0;
-        }
-
-        data.push(value);
-        dates.push(monthDatesMap.get(month));
-        isPRMonth.push(isPRMonthMap.get(month)); // Check if it's a PR month
-      } else if (highestWeightSoFar > 0) {
-        // For months without data, avoid long plateaus
-        monthsWithoutPR++;
-
-        // Add small incremental increases instead of flat plateaus
-        // after 2 months without a PR
-        if (monthsWithoutPR > 1) {
-          // Tiny progress (0.5-1.5kg) even without a PR to avoid plateaus
-          const smallIncrease = 0.5 + Math.random();
-          highestWeightSoFar += smallIncrease;
-        }
-
-        data.push(highestWeightSoFar);
-
-        // Use a placeholder date for this empty month
-        const monthDate = new Date(parseInt(yearToUse), month, 15);
-        dates.push(monthDate.toISOString().split("T")[0]);
-        isPRMonth.push(false); // Not a PR month
+      // Ensure weight never decreases
+      if (weightValue < highestWeightSoFar) {
+        // If this month's weight is less than previous max, use previous max
+        weightValue = highestWeightSoFar;
+        // This is no longer a PR month since we're using the previous max
+        isPRMonthMap.set(month, false);
       } else {
-        // No data for this month and no previous data
-        data.push(0);
-        const monthDate = new Date(parseInt(yearToUse), month, 15);
-        dates.push(monthDate.toISOString().split("T")[0]);
-        isPRMonth.push(false); // Not a PR month
+        // Update highest weight if this is higher
+        highestWeightSoFar = weightValue;
       }
+
+      data[month] = weightValue;
+      dates[month] = monthDatesMap.get(month);
+      isPRMonth[month] = isPRMonthMap.get(month); // Check if it's a PR month
     });
 
-    // Ensure December always has the year's max value (for visual consistency with displayed max)
-    const graphMaxValue = Math.max(...data.filter((val) => val > 0)); // Get maximum value from graph data
+    // Ensure the max value is represented in the data
+    const graphMaxValue = Math.max(
+      ...data.filter((val) => val !== null && val > 0)
+    ); // Get maximum value from graph data
     const actualMax = maxWeight || graphMaxValue; // Use provided max weight if available
 
     // Make sure at least one point in the graph shows the actual max
@@ -954,27 +845,19 @@ const ClientsStats = ({ route }) => {
 
     if (!hasActualMax && actualMax > 0) {
       // Find the last month with data to show the max
-      let lastMonthWithData = 11; // Default to December
+      let lastMonthWithData = -1;
       for (let m = 11; m >= 0; m--) {
-        if (data[m] > 0) {
+        if (data[m] !== null) {
           lastMonthWithData = m;
           break;
         }
       }
 
-      // Update that month to show the actual max
-      data[lastMonthWithData] = actualMax;
-      isPRMonth[lastMonthWithData] = true; // Mark as PR month
-    }
-
-    // If December has no data but should have the max, add it there
-    if (!monthDataMap.has(11) && actualMax > 0) {
-      // December is index 11
-      data[11] = actualMax;
-      const decemberDate = new Date(parseInt(yearToUse), 11, 28);
-      dates[11] = decemberDate.toISOString().split("T")[0];
-      isPRMonth[11] = true; // Mark as PR month so it's clickable
-      console.log(`[DEBUG] Added max value ${actualMax}kg to December`);
+      // Only update if we found a month with data
+      if (lastMonthWithData >= 0) {
+        data[lastMonthWithData] = actualMax;
+        isPRMonth[lastMonthWithData] = true; // Mark as PR month
+      }
     }
 
     return {
@@ -1024,6 +907,24 @@ const ClientsStats = ({ route }) => {
     });
   };
 
+  // Helper function to convert hex to rgb
+  const hexToRgb = (hex) => {
+    // Remove # if present
+    hex = hex.replace("#", "");
+
+    // Convert 3-digit hex to 6-digit
+    if (hex.length === 3) {
+      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+
+    // Parse the hex values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+
+    return { r, g, b };
+  };
+
   const renderChart = (data, title, color, dataKey) => {
     if (!data) return null;
 
@@ -1033,23 +934,18 @@ const ClientsStats = ({ route }) => {
       datasets: [
         {
           data: data[`${dataKey}Data`]?.datasets[0]?.data || [],
-          color: (opacity = 1) =>
-            color +
-            Math.round(opacity * 255)
-              .toString(16)
-              .padStart(2, "0"),
           strokeWidth: 3,
         },
       ],
       dates: data[`${dataKey}Data`]?.dates || [],
       isPRMonth: data[`${dataKey}Data`]?.isPRMonth || [],
       scale: "monthly", // Always use monthly scale
-      splitPoint: data[`${dataKey}Data`]?.splitPoint,
     };
 
     // Check if there's any data for this year
     const hasData =
-      data[`${dataKey}Data`] !== null && chartData.datasets[0].data.length > 0;
+      data[`${dataKey}Data`] !== null &&
+      chartData.datasets[0].data.some((value) => value !== null && value > 0);
 
     if (!hasData) {
       return (
@@ -1064,14 +960,38 @@ const ClientsStats = ({ route }) => {
     // Get y-axis config based on lift data
     const yAxisConfig = getYAxisConfig(data[`${dataKey}Data`]);
 
-    // Custom labels for monthly view
-    const getCustomLabels = () => chartData.labels;
+    // Create a lighter version of the color for gradient
+    const hexColor = color.startsWith("#") ? color : "#" + color;
+    const rgbColor = hexToRgb(hexColor);
+    const lightColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.1)`;
+    const mediumColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.5)`;
+
+    // Update the dataset color to match the title color
+    chartData.datasets[0].color = (opacity = 1) => {
+      // Return full hex color for the line
+      if (opacity >= 1) return hexColor;
+      // Return rgba for gradient fill
+      return `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, ${opacity})`;
+    };
+
+    // Create a custom dataset that only connects months with actual data
+    const customDataset = {
+      labels: chartData.labels,
+      datasets: [
+        {
+          // Keep null values as null instead of converting to 0
+          data: chartData.datasets[0].data,
+          color: chartData.datasets[0].color,
+          strokeWidth: 3,
+          withDots: chartData.datasets[0].data.map((value) => value !== null),
+        },
+      ],
+    };
 
     return (
       <View style={styles.singleChartContainer}>
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>{title}</Text>
-          {/* Time scale buttons removed */}
         </View>
 
         {isTransitioning ? (
@@ -1080,40 +1000,48 @@ const ClientsStats = ({ route }) => {
           </View>
         ) : (
           <LineChart
-            data={{
-              labels: getCustomLabels(),
-              datasets: chartData.datasets,
-            }}
-            width={Dimensions.get("window").width - 32}
+            data={customDataset}
+            width={Dimensions.get("window").width - 50}
             height={180}
             chartConfig={{
-              backgroundColor: "#fff",
+              backgroundColor: "transparent",
               backgroundGradientFrom: "#fff",
               backgroundGradientTo: "#fff",
               decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              strokeWidth: 1,
+              color: (opacity = 1) => chartData.datasets[0].color(opacity),
+              labelColor: (opacity = 1) => `rgba(100, 100, 100, ${opacity})`,
+              strokeWidth: 2,
               barPercentage: 0.5,
               useShadowColorFromDataset: true,
+              fillShadowGradient: hexColor,
               fillShadowGradientOpacity: 0.2,
               propsForBackgroundLines: {
-                strokeDasharray: "5, 5",
+                strokeDasharray: "6, 6",
                 strokeWidth: 1,
-                stroke: "rgba(0, 0, 0, 0.1)",
+                stroke: "rgba(230, 230, 230, 0.9)",
               },
-              paddingLeft: 5,
-              paddingRight: 10,
+              propsForDots: {
+                r: "5",
+                strokeWidth: "2",
+                stroke: "#fff",
+              },
+              paddingLeft: 0,
+              paddingRight: 40,
               paddingTop: 20,
               paddingBottom: 20,
               propsForLabels: {
-                fontSize: 8,
-                fontWeight: "400",
+                fontSize: 7,
+                fontWeight: "500",
+                fill: "#666",
+                rotation: 0,
               },
             }}
             onDataPointClick={({ index }) => {
-              // Only allow click on actual PR months
-              if (chartData.isPRMonth[index]) {
+              // Only allow click on actual PR months and only if there's actual data
+              if (
+                chartData.isPRMonth[index] &&
+                chartData.datasets[0].data[index] !== null
+              ) {
                 const weight = chartData.datasets[0].data[index];
                 const date = chartData.dates[index];
                 const month = chartData.labels[index];
@@ -1133,9 +1061,102 @@ const ClientsStats = ({ route }) => {
                 setShowDataPointModal(true);
               }
             }}
-            bezier={false} // Use straight lines instead of bezier curves
-            withDots={true} // Show dots for each data point
-            fromZero={false} // Start y-axis from zero
+            bezier={false}
+            withDots={true}
+            renderDotContent={({ x, y, index }) => {
+              // Only render dots for months with actual data
+              if (chartData.datasets[0].data[index] === null) {
+                return null;
+              }
+              return (
+                <View
+                  key={index}
+                  style={{
+                    position: "absolute",
+                    left: x - 5,
+                    top: y - 5,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: hexColor,
+                    borderWidth: 2,
+                    borderColor: "#fff",
+                  }}
+                />
+              );
+            }}
+            getDotProps={(dataPoint, index) => {
+              // Only show dots for months with actual data
+              if (chartData.datasets[0].data[index] === null) {
+                return { r: "0", strokeWidth: "0" };
+              }
+              return { r: "5", strokeWidth: "2", stroke: "#fff" };
+            }}
+            // Custom path component to only connect dots for months with actual data
+            renderDecorator={({ line, x, y }) => {
+              // Find indices of months with actual data
+              const monthsWithData = chartData.datasets[0].data
+                .map((value, index) => (value !== null ? index : -1))
+                .filter((index) => index !== -1);
+
+              if (monthsWithData.length <= 1) {
+                return null; // No line if only one or zero data points
+              }
+
+              // Create a custom path that only connects months with data
+              let pathD = "";
+              let lastX = null;
+              let lastY = null;
+
+              // Calculate chart dimensions
+              const chartWidth = Dimensions.get("window").width - 50;
+              const chartHeight = 180;
+              const paddingRight = 40;
+              const paddingLeft = 0;
+              const paddingTop = 20;
+              const paddingBottom = 20;
+
+              // Calculate the content area dimensions
+              const contentWidth = chartWidth - paddingLeft - paddingRight;
+              const contentHeight = chartHeight - paddingTop - paddingBottom;
+
+              // Calculate the step between each month on x-axis
+              const step = contentWidth / (chartData.labels.length - 1);
+
+              // For each month with data, calculate its position and add to path
+              monthsWithData.forEach((monthIndex, i) => {
+                // Get the value for this month
+                const value = chartData.datasets[0].data[monthIndex];
+                if (value === null) return;
+
+                // Calculate x position based on month index
+                const xPos = paddingLeft + monthIndex * step;
+
+                // Calculate y position based on value
+                // Map the value from data range to pixel range
+                const dataRange = yAxisConfig.max - yAxisConfig.min;
+                const yPos =
+                  chartHeight -
+                  paddingBottom -
+                  ((value - yAxisConfig.min) / dataRange) * contentHeight;
+
+                if (i === 0) {
+                  // First point - move to this position
+                  pathD += `M ${xPos} ${yPos} `;
+                } else {
+                  // Subsequent points - draw line to this position
+                  pathD += `L ${xPos} ${yPos} `;
+                }
+
+                lastX = xPos;
+                lastY = yPos;
+              });
+
+              return pathD ? (
+                <Path d={pathD} stroke={hexColor} strokeWidth={2} fill="none" />
+              ) : null;
+            }}
+            fromZero={false}
             style={{
               marginVertical: 8,
               borderRadius: 16,
@@ -1145,38 +1166,26 @@ const ClientsStats = ({ route }) => {
               borderWidth: 1,
               borderColor: "#f0f0f0",
               marginBottom: 15,
-              marginLeft: -5,
+              marginLeft: 0,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
             }}
             withInnerLines={true}
             withOuterLines={true}
-            withVerticalLines={true}
+            withVerticalLines={false}
             withHorizontalLines={true}
-            withShadow={false}
+            withShadow={true}
             segments={4}
             yAxisInterval={1}
             yAxisMax={yAxisConfig.max}
             yAxisMin={yAxisConfig.min}
             yAxisSuffix="kg"
-            formatXLabel={(value) => `${value}`}
-            // Use decorator instead of renderDotContent
-            decorator={({ x, y, index, value }) => {
-              // Only render dots for PR months
-              if (!chartData.isPRMonth[index]) return null;
-
-              return (
-                <View
-                  key={index}
-                  style={{
-                    position: "absolute",
-                    left: x - 4,
-                    top: y - 4,
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: color,
-                  }}
-                />
-              );
+            formatXLabel={(value) => {
+              // Use just the first three letters of month names to ensure they fit
+              return value.substring(0, 3);
             }}
           />
         )}
@@ -1186,24 +1195,24 @@ const ClientsStats = ({ route }) => {
 
   // Function to get y-axis configuration based on the lift data
   const getYAxisConfig = (liftData) => {
-    if (
-      !liftData ||
-      !liftData.datasets ||
-      !liftData.datasets[0] ||
-      !liftData.datasets[0].data
-    ) {
-      return {
-        max: 250,
-        min: 0,
-        ticks: [0, 50, 100, 150, 200, 250],
-      };
+    if (!liftData || !liftData.datasets || liftData.datasets.length === 0) {
+      return { min: 0, max: 100, ticks: [0, 25, 50, 75, 100] };
     }
 
-    const data = liftData.datasets[0].data;
-    const maxValue = Math.max(...data);
-    const minValue = Math.min(...data.filter((val) => val > 0));
+    // Filter out null values before calculating min/max
+    const validData = liftData.datasets[0].data.filter(
+      (value) => value !== null && value !== undefined && value > 0
+    );
 
-    // Round up max to the next 50
+    if (validData.length === 0) {
+      return { min: 0, max: 100, ticks: [0, 25, 50, 75, 100] };
+    }
+
+    // Calculate min and max values from the data
+    const maxValue = Math.max(...validData);
+    const minValue = Math.min(...validData);
+
+    // Round up max to the next 50 to create some space above the highest data point
     const roundedMax = Math.ceil(maxValue / 50) * 50;
 
     // Round down min to the previous 50 or 75% of min value, whichever is lower
@@ -1327,10 +1336,7 @@ const ClientsStats = ({ route }) => {
             <>
               <View style={styles.maxLiftsContainer}>
                 <TouchableOpacity
-                  style={[
-                    styles.maxLiftCard,
-                    { borderColor: "rgba(173, 216, 230, 1)" },
-                  ]}
+                  style={[styles.maxLiftCard, { borderColor: colors.squat }]}
                   onPress={() => handleMaxLiftClick("squat")}
                 >
                   <Text style={styles.maxLiftLabel}>Squat</Text>
@@ -1348,7 +1354,7 @@ const ClientsStats = ({ route }) => {
                 <TouchableOpacity
                   style={[
                     styles.maxLiftCard,
-                    { borderColor: "rgba(255, 182, 193, 1)" },
+                    { borderColor: colors.benchPress },
                   ]}
                   onPress={() => handleMaxLiftClick("bench")}
                 >
@@ -1365,10 +1371,7 @@ const ClientsStats = ({ route }) => {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.maxLiftCard,
-                    { borderColor: "rgba(144, 238, 144, 1)" },
-                  ]}
+                  style={[styles.maxLiftCard, { borderColor: colors.deadlift }]}
                   onPress={() => handleMaxLiftClick("deadlift")}
                 >
                   <Text style={styles.maxLiftLabel}>Deadlift</Text>
@@ -1387,19 +1390,19 @@ const ClientsStats = ({ route }) => {
               {renderChart(
                 selectedClient.analytics,
                 "Squat",
-                "rgba(173, 216, 230, 1)",
+                colors.squat,
                 "squat"
               )}
               {renderChart(
                 selectedClient.analytics,
                 "Bench Press",
-                "rgba(255, 182, 193, 1)",
+                colors.benchPress,
                 "bench"
               )}
               {renderChart(
                 selectedClient.analytics,
                 "Deadlift",
-                "rgba(144, 238, 144, 1)",
+                colors.deadlift,
                 "deadlift"
               )}
             </>
@@ -1566,7 +1569,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "bold",
     marginBottom: 0,
-    marginTop: 60,
+    marginTop: 25,
     paddingHorizontal: 0,
   },
   loadingContainer: {
@@ -1810,11 +1813,18 @@ const styles = StyleSheet.create({
   noDataContainer: {
     padding: 20,
     alignItems: "center",
-    paddingHorizontal: 16,
+    justifyContent: "center",
+    height: 180,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    marginBottom: 15,
   },
   noDataText: {
     fontSize: 16,
     color: "#666",
+    textAlign: "center",
   },
   testButton: {
     marginBottom: 20,
@@ -1829,6 +1839,14 @@ const styles = StyleSheet.create({
     width: Dimensions.get("window").width - 32,
     marginLeft: -16,
     marginRight: -16,
+    marginBottom: 15,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   chartHeader: {
     flexDirection: "row",
@@ -1836,6 +1854,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
     paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+  },
+  loadingContainer: {
+    height: 180,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: "#666",
   },
   timeScaleButtons: {
     flexDirection: "row",
@@ -1856,11 +1892,6 @@ const styles = StyleSheet.create({
   },
   resetZoomButton: {
     backgroundColor: "#666",
-  },
-  loadingContainer: {
-    height: 180,
-    justifyContent: "center",
-    alignItems: "center",
   },
   scaleIndicator: {
     position: "absolute",

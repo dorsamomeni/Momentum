@@ -22,7 +22,6 @@ import {
   updateDoc,
   arrayRemove,
 } from "firebase/firestore";
-import FindCoach from "../pages/FindCoach";
 
 const AthleteHome = () => {
   const navigation = useNavigation();
@@ -52,7 +51,6 @@ const AthleteHome = () => {
     console.log("Pull-to-refresh triggered");
     setRefreshing(true);
 
-    // Explicitly use Promise handling for the refresh
     Promise.resolve()
       .then(() => loadUserData())
       .catch((error) => {
@@ -72,8 +70,6 @@ const AthleteHome = () => {
         const data = userDoc.data();
         setUserData(data);
 
-        // Instead of using data.activeBlocks directly,
-        // we'll fetch blocks from the blocks collection
         const blocksQuery = query(
           collection(db, "blocks"),
           where("athleteId", "==", user.uid)
@@ -173,7 +169,7 @@ const AthleteHome = () => {
     } catch (error) {
       console.error("Error loading user data:", error);
     }
-    return Promise.resolve(); // Make sure to return a Promise for onRefresh
+    return Promise.resolve(); 
   };
 
   const handleRemoveCoach = async () => {
@@ -181,7 +177,7 @@ const AthleteHome = () => {
       const user = auth.currentUser;
       if (!user) return;
 
-      // Confirm with the user
+      // Confirm removing coachwith the user
       Alert.alert(
         "Remove Coach",
         "Are you sure you want to remove your coach?",
@@ -202,7 +198,6 @@ const AthleteHome = () => {
                 });
               }
 
-              // Update local state
               setCoachData(null);
               Alert.alert("Success", "Coach removed successfully");
             },

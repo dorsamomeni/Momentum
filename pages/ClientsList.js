@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 40,
-    paddingTop: 140,
+    paddingTop: 100,
   },
   header: {
     flexDirection: "column",
