@@ -1891,13 +1891,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   primaryButton: {
-    // No background color override
   },
   primaryButtonText: {
     color: "#000",
   },
   deleteButton: {
-    // No background color override
   },
   deleteButtonText: {
     color: "#FF3B30",

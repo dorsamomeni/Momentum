@@ -199,7 +199,7 @@ const ClientDetails = ({ route }) => {
       await setDoc(weekRef, {
         id: weekId,
         blockId: blockId,
-        weekNumber: 1, // Only week 1
+        weekNumber: 1, 
         daysPerWeek: sessionsPerWeek,
         startDate: formattedStartDate,
         submittedAt: serverTimestamp(),
@@ -1364,8 +1364,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   previousBlock: {
-    backgroundColor: "#F5F5F5", // Light grey background
-    borderColor: "#DDDDDD", // Light grey border
+    backgroundColor: "#F5F5F5",
+    borderColor: "#DDDDDD", 
   },
 });
 

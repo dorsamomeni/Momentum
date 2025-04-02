@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   bottomSpace: {
-    height: 80, // Extra space at the bottom to ensure scrollability
+    height: 80, 
   },
 });
 

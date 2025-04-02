@@ -44,7 +44,7 @@ const AthleteStats = () => {
   const fadeAnim = useState(new Animated.Value(0))[0];
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false); // Add this line
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // State for progression data
   const [squatData, setSquatData] = useState(null);
@@ -347,13 +347,13 @@ const AthleteStats = () => {
               firstName: firstName,
               lastName: lastName,
               email: email,
-              username: username, // Add username for coach search
+              username: username,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
               profileColor:
                 "#" + Math.floor(Math.random() * 16777215).toString(16), // Random color
-              role: "athlete", // Specify role as athlete
-              isActive: true, // Mark as active user
+              role: "athlete",
+              isActive: true,
             };
 
             await setDoc(userRef, userData);
@@ -709,7 +709,7 @@ const AthleteStats = () => {
 
       if (isDemoMode) {
         // If we were in demo mode, regenerate the demo data
-        generateDemoData(false); // Pass false to avoid saving state again
+        generateDemoData(false);
       } else {
         try {
           // Check if user is authenticated
@@ -2156,9 +2156,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
-    position: "relative", // Ensure proper positioning for absolute elements
-    overflow: "visible", // Allow elements to overflow container
-    zIndex: 1, // Base zIndex for container
+    position: "relative",
+    overflow: "visible",
+    zIndex: 1,
   },
   chartHeader: {
     flexDirection: "row",
@@ -2218,7 +2218,7 @@ const styles = StyleSheet.create({
   },
   fixedTooltipWrapper: {
     marginTop: 10,
-    marginBottom: 10, // Increased bottom margin
+    marginBottom: 10,
     alignItems: "center",
     width: "100%",
   },
@@ -2240,13 +2240,13 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: 75, // Increased width to match new left padding
-    paddingRight: 15, // Increased right padding to move values away from the chart
-    paddingTop: 20, // Match chart padding
-    paddingBottom: 10, // Match chart padding
+    width: 75,
+    paddingRight: 15,
+    paddingTop: 20,
+    paddingBottom: 10,
     justifyContent: "space-between",
     alignItems: "flex-end",
-    backgroundColor: "transparent", // Changed to transparent
+    backgroundColor: "transparent",
     zIndex: 10,
   },
   yAxisValue: {
@@ -2255,7 +2255,7 @@ const styles = StyleSheet.create({
     color: "#555",
     textAlign: "right",
     position: "absolute",
-    right: 15, // Increased right position to move values further from the chart
+    right: 15,
   },
   clientName: {
     fontSize: 20,
@@ -2314,9 +2314,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     zIndex: 1000,
   },
-  yearDropdown: {
-    // Add your year options here
-  },
+  yearDropdown: {},
   updateModalContainer: {
     backgroundColor: "#fff",
     borderRadius: 16,

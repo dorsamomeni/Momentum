@@ -469,7 +469,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
   },
-  // Create button - now part of the main content
   createButton: {
     backgroundColor: "#000",
     padding: 15,
@@ -486,9 +485,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   keyboardSpace: {
-    height: 100, // Space to ensure button is visible with keyboard
+    height: 100, 
   },
-  // Modal and picker styles
   modalContainer: {
     flex: 1,
     justifyContent: "flex-end",
@@ -530,7 +528,6 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "left",
   },
-  // Date picker styles
   datePickerWrapper: {
     alignItems: "center",
     justifyContent: "center",
